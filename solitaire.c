@@ -4,7 +4,16 @@
 #define CARD_ASPECT (560.0f/780.0f)
 #define ARRAY_COUNT(array) sizeof(array) / sizeof(*(array))
 
+typedef enum {
+	PILE_NONE,
+	PILE_STOCK,
+	PILE_WASTE,
+	PILE_FOUNDATION,
+	PILE_TABLEAU,
+} PileKind;
+
 typedef struct {
+	PileKind kind;
 	oc_vec2 pos;
 	oc_list cards;
 } Pile;
@@ -126,6 +135,41 @@ static void load_card_images(void) {
 	}
 }
 
+static void pile_push(Pile *pile, Card *card) {
+	switch(pile->kind) {
+	case PILE_STOCK: {
+		Card *top = oc_list_first_entry(pile->cards, Card, node);
+		if (top) {
+			card->pos.x = top->pos.x - 1;
+			card->pos.y = top->pos.y - 1;
+		} else {
+			card->pos = pile->pos;
+		}
+		break;
+	}
+	case PILE_WASTE:
+	case PILE_FOUNDATION:
+		card->pos = pile->pos;
+		break;
+	case PILE_TABLEAU: {
+		Card *top = oc_list_first_entry(pile->cards, Card, node);
+		if (top) {
+			i32 y_offset = top->face_up ? (0.25f * game.card_height) : (0.125f * game.card_height);
+			card->pos.x = top->pos.x;
+			card->pos.y = top->pos.y + y_offset;
+		} else {
+			card->pos = pile->pos;
+		}
+		break;
+	}
+	default:
+		assert(0);
+		break;
+	}
+
+	oc_list_push(&pile->cards, &card->node);
+}
+
 static void deal_klondike(Card *cards, i32 num_cards) {
 	assert(SUIT_COUNT * CARD_KIND_COUNT == num_cards);
 
@@ -143,9 +187,7 @@ static void deal_klondike(Card *cards, i32 num_cards) {
 
 	// put all cards in stock
 	for (i32 i=0; i<num_cards; ++i) {
-		oc_list_push(&game.stock.cards, &cards[i].node);
-		cards[i].pos.x = game.stock.pos.x - i;
-		cards[i].pos.y = game.stock.pos.y - i;
+		pile_push(&game.stock, &cards[i]);
 	}
 
 	// deal to tableau
@@ -155,45 +197,33 @@ static void deal_klondike(Card *cards, i32 num_cards) {
 		i32 face_up_y_offset = 0.25f * game.card_height;
 		i32 y_offset = 0;
 		for (i32 i_face_down=0; i_face_down < i; ++i_face_down) {
-			oc_list_elt *node = oc_list_pop(&game.stock.cards);
-			Card *card = oc_list_entry(node, Card, node);
+			Card *card = oc_list_pop_entry(&game.stock.cards, Card, node);
 			card->face_up = false;
-			card->pos.x = game.tableau[i].pos.x;
-			card->pos.y = game.tableau[i].pos.y + y_offset;
-			y_offset += card->face_up ? face_up_y_offset : face_down_y_offset;
-			oc_list_push(&game.tableau[i].cards, node);
+			pile_push(&game.tableau[i], card);
 		}
 
 		// deal 1 card face up
 		// TODO: DELETE LOOP
 		for (i32 j=0; j<3; ++j) {
-			oc_list_elt *node = oc_list_pop(&game.stock.cards);
-			Card *card = oc_list_entry(node, Card, node);
+			Card *card = oc_list_pop_entry(&game.stock.cards, Card, node);
 			card->face_up = true;
-			card->pos.x = game.tableau[i].pos.x;
-			card->pos.y = game.tableau[i].pos.y + y_offset;
-			y_offset += card->face_up ? face_up_y_offset : face_down_y_offset;
-			oc_list_push(&game.tableau[i].cards, node);
+			pile_push(&game.tableau[i], card);
 		}
 	}
 
 	// TODO: DELETE MEE: put some cards in waste and foundations for testing
 	for (i32 j=0; j<3; ++j) {
-		oc_list_elt *node = oc_list_pop(&game.stock.cards);
-		Card *card = oc_list_entry(node, Card, node);
+		Card *card = oc_list_pop_entry(&game.stock.cards, Card, node);
 		card->face_up = true;
-		card->pos.x = game.waste.pos.x;
-		card->pos.y = game.waste.pos.y;
-		oc_list_push(&game.waste.cards, node);
+		pile_push(&game.waste, card);
 
-		node = oc_list_pop(&game.stock.cards);
-		card = oc_list_entry(node, Card, node);
+		card = oc_list_pop_entry(&game.stock.cards, Card, node);
 		card->face_up = true;
-		card->pos.x = game.foundations[j].pos.x;
-		card->pos.y = game.foundations[j].pos.y;
-		oc_list_push(&game.foundations[j].cards, node);
+		pile_push(&game.foundations[j], card);
 	}
 }
+
+
 
 
 ORCA_EXPORT void oc_on_init(void) {
@@ -206,6 +236,15 @@ ORCA_EXPORT void oc_on_init(void) {
 
 	load_card_images();
 	game.selected_card_back = 5;
+
+	game.stock.kind = PILE_STOCK;
+	game.waste.kind = PILE_WASTE;
+	for (i32 i=0; i<ARRAY_COUNT(game.foundations); ++i) {
+		game.foundations[i].kind = PILE_FOUNDATION;
+	}
+	for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
+		game.tableau[i].kind = PILE_TABLEAU;
+	}
 
 	deal_klondike(game.cards, ARRAY_COUNT(game.cards));
 }
@@ -351,6 +390,11 @@ static void solitaire_draw(void) {
 //------------------------------------------------------------------------------
 // Game Logic
 //------------------------------------------------------------------------------
+static bool point_in_rect(f32 x, f32 y, oc_rect rect) {
+	return x >= rect.x && x < rect.x + rect.w &&
+		   y >= rect.y && y < rect.y + rect.h;
+}
+
 static bool point_in_card_bounds(f32 x, f32 y, Card *card) {
 	if (!card)
 		return false;
@@ -418,23 +462,50 @@ static void solitaire_update(void) {
 	bool mouse_pressed = game.mouse_input.down && !game.mouse_input.was_down;
 	bool mouse_released = !game.mouse_input.down && game.mouse_input.was_down;
 
-	// find card currently being dragged
 	if (mouse_pressed) {
-		Card *card_dragging = get_hovered_card();
-		if (can_drag(card_dragging)) {
-			// store pos and drag offset for all cards being dragged together
-			for (oc_list_elt *node = &card_dragging->node; node; node = node->prev) {
-				Card *card = oc_list_entry(node, Card, node);
-				card->pos_before_drag = card->pos;
-				card->drag_offset.x = game.mouse_input.x - card->pos.x;
-				card->drag_offset.y = game.mouse_input.y - card->pos.y;
+		Card *clicked_card = get_hovered_card();
+		if (clicked_card) {
+			// start dragging card
+			if (can_drag(clicked_card)) {
+				// store pos and drag offset for all cards being dragged together
+				for (oc_list_elt *node = &clicked_card->node; node; node = node->prev) {
+					Card *card = oc_list_entry(node, Card, node);
+					card->pos_before_drag = card->pos;
+					card->drag_offset.x = game.mouse_input.x - card->pos.x;
+					card->drag_offset.y = game.mouse_input.y - card->pos.y;
+				}
+				game.card_dragging = clicked_card;
 			}
-			game.card_dragging = card_dragging;
+
+			// if stock clicked, move a card to waste
+			if (clicked_card == oc_list_first_entry(game.stock.cards, Card, node)) {
+				Card *card = oc_list_pop_entry(&game.stock.cards, Card, node);
+				card->face_up = true;
+				pile_push(&game.waste, card);
+			}
+		} else {
+			// if empty stock clicked, move all waste to stock
+			if (oc_list_empty(game.stock.cards)) {
+				oc_rect stock_rect = { 
+					game.stock.pos.x, 
+					game.stock.pos.y, 
+					game.stock.pos.x + game.card_width,
+					game.stock.pos.y + game.card_height };
+				if (point_in_rect(game.mouse_input.x, game.mouse_input.y, stock_rect)) {
+					Card *card = oc_list_pop_entry(&game.waste.cards, Card, node); 
+					while (card) {
+						card->face_up = false;
+						pile_push(&game.stock, card);
+						card = oc_list_pop_entry(&game.waste.cards, Card, node); 
+					}	
+				}
+			}
 		}
 
 	} else if (mouse_released) {
 		if (game.card_dragging) {
 			// if it is released on another card, place it on that pile if possible
+
 
 			// else return the cards to pile they were on previously
 			for (oc_list_elt *node = &game.card_dragging->node; node; node = node->prev) {
@@ -454,8 +525,6 @@ static void solitaire_update(void) {
 		}
 	}
 
-	// if stock clicked, move a card to waste
-	// if mouse dragged, move card if possible
 	// if mouse released while dragging a card
 	    // if it is released on another card, place it on that pile if possible
 		// else return the card to pile it was on previously
