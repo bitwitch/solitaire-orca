@@ -100,8 +100,10 @@ void set_sizes_based_on_viewport(u32 width, u32 height) {
 
 	game.stock.pos.x = game.board_margin.x;
 	game.stock.pos.y = game.board_margin.y;
+
 	game.waste.pos.x = game.stock.pos.x + game.card_width + game.card_margin_x;
 	game.waste.pos.y = game.board_margin.y;
+
 	for (i32 i=0; i<ARRAY_COUNT(game.foundations); ++i) {
 		game.foundations[i].pos.x = game.board_margin.x + ((i + 3) * (game.card_width + game.card_margin_x));
 		game.foundations[i].pos.y = game.board_margin.y;
@@ -136,7 +138,8 @@ static void load_card_images(void) {
 	}
 }
 
-static void position_card_on_pile(Card *card, Pile *pile) {
+
+static void position_card_on_top_of_pile(Card *card, Pile *pile) {
 	switch(pile->kind) {
 	case PILE_STOCK: {
 		Card *top = oc_list_first_entry(pile->cards, Card, node);
@@ -169,6 +172,41 @@ static void position_card_on_pile(Card *card, Pile *pile) {
 	}
 }
 
+static void position_all_cards_on_pile(Pile *pile) {
+	switch (pile->kind) {
+	case PILE_WASTE:
+	case PILE_FOUNDATION: {
+		oc_list_for_reverse(pile->cards, card, Card, node) {
+			card->pos = pile->pos;
+		}
+		break;
+	}
+	case PILE_STOCK: {
+		i32 offset = 0;
+		oc_list_for_reverse(pile->cards, card, Card, node) {
+			card->pos.x = pile->pos.x - offset;
+			card->pos.y = pile->pos.y - offset;
+			++offset;
+		}
+		break;
+	}
+	case PILE_TABLEAU: {
+		i32 y_offset_face_up = 0.25f * game.card_height;
+		i32 y_offset_face_down = 0.125f * game.card_height;
+		i32 y_offset = 0;
+		oc_list_for_reverse(pile->cards, card, Card, node) {
+			card->pos.x = pile->pos.x;
+			card->pos.y = pile->pos.y + y_offset;
+			y_offset += card->face_up ? y_offset_face_up : y_offset_face_down;
+		}
+		break;
+	}
+	default:
+		assert(0);
+		break;
+	}
+}
+
 static void pile_push(Pile *pile, Card *card) {
 	// this is basically moving a sublist from one list to another
 	// rather than a single element 
@@ -187,14 +225,14 @@ static void pile_push(Pile *pile, Card *card) {
 		pile->cards.last = node;
 	}
 
-	position_card_on_pile(card, pile);
+	position_card_on_top_of_pile(card, pile);
 	card->pile = pile;
 	pile->cards.first = node;
 
 	while (node->prev) {
 		node = node->prev;
 		Card *current = oc_list_entry(node, Card, node);
-		position_card_on_pile(current, pile);
+		position_card_on_top_of_pile(current, pile);
 		current->pile = pile;
 		pile->cards.first = node;
 	}
@@ -280,8 +318,18 @@ ORCA_EXPORT void oc_on_init(void) {
 }
 
 ORCA_EXPORT void oc_on_resize(u32 width, u32 height) {
-	set_sizes_based_on_viewport(width, height);
 	oc_log_info("width=%lu height=%lu", width, height);
+
+	set_sizes_based_on_viewport(width, height);
+
+	position_all_cards_on_pile(&game.stock);
+	position_all_cards_on_pile(&game.waste);
+	for (i32 i=0; i<ARRAY_COUNT(game.foundations); ++i) {
+		position_all_cards_on_pile(&game.foundations[i]);
+	}
+	for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
+		position_all_cards_on_pile(&game.tableau[i]);
+	}
 }
 
 //------------------------------------------------------------------------------
