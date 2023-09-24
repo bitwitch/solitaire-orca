@@ -46,6 +46,7 @@ typedef enum {
 typedef struct {
 	Suit suit;
 	CardKind kind;
+	Pile *pile;
 	oc_vec2 pos;
 	oc_vec2 drag_offset; // offset from mouse to top left corner of card
 	oc_vec2 pos_before_drag;
@@ -135,7 +136,7 @@ static void load_card_images(void) {
 	}
 }
 
-static void pile_push(Pile *pile, Card *card) {
+static void position_card_on_pile(Card *card, Pile *pile) {
 	switch(pile->kind) {
 	case PILE_STOCK: {
 		Card *top = oc_list_first_entry(pile->cards, Card, node);
@@ -166,8 +167,37 @@ static void pile_push(Pile *pile, Card *card) {
 		assert(0);
 		break;
 	}
+}
 
-	oc_list_push(&pile->cards, &card->node);
+static void pile_push(Pile *pile, Card *card) {
+	// this is basically moving a sublist from one list to another
+	// rather than a single element 
+	oc_list *old_list = &card->pile->cards;
+	oc_list_elt *node = &card->node;
+	if (node->next) {
+		node->next->prev = NULL;
+		old_list->first = node->next;
+	}
+
+	oc_list_elt *top = oc_list_begin(pile->cards);
+	if (top) {
+		node->next = top;
+		top->prev = node;
+	} else {
+		pile->cards.last = node;
+	}
+
+	position_card_on_pile(card, pile);
+	card->pile = pile;
+	pile->cards.first = node;
+
+	while (node->prev) {
+		node = node->prev;
+		Card *current = oc_list_entry(node, Card, node);
+		position_card_on_pile(current, pile);
+		current->pile = pile;
+		pile->cards.first = node;
+	}
 }
 
 static void deal_klondike(Card *cards, i32 num_cards) {
@@ -266,7 +296,7 @@ static void draw_stock(void) {
 		game.stock.pos.x + (0.5f * border_width), 
 		game.stock.pos.y + (0.5f * border_width), 
 		game.card_width - border_width, 
-		game.card_height - border_width,  
+		game.card_height - border_width,
 		5);
 
 	// TODO(shaw): draw an icon to indicate clicking to reset stock pile
@@ -392,7 +422,7 @@ static void solitaire_draw(void) {
 //------------------------------------------------------------------------------
 static bool point_in_rect(f32 x, f32 y, oc_rect rect) {
 	return x >= rect.x && x < rect.x + rect.w &&
-		   y >= rect.y && y < rect.y + rect.h;
+	       y >= rect.y && y < rect.y + rect.h;
 }
 
 static bool point_in_card_bounds(f32 x, f32 y, Card *card) {
@@ -402,29 +432,70 @@ static bool point_in_card_bounds(f32 x, f32 y, Card *card) {
 		   y >= card->pos.y && y < card->pos.y + game.card_height;
 }
 
+static Pile *get_hovered_pile(void) {
+	f32 mx = game.mouse_input.x;
+	f32 my = game.mouse_input.y;
 
+	oc_vec2 pos = game.stock.pos;
+	oc_rect rect = { pos.x, pos.y, game.card_width, game.card_height };
+	if (point_in_rect(mx, my, rect)) {
+		return &game.stock;
+	} 
+
+	pos = game.waste.pos;
+	rect = (oc_rect){ pos.x, pos.y, game.card_width, game.card_height };
+	if (point_in_rect(mx, my, rect)) {
+		return &game.waste;
+	} 
+
+	for (i32 i=0; i<ARRAY_COUNT(game.foundations); ++i) {
+		oc_vec2 pos = game.foundations[i].pos;
+		rect = (oc_rect){ pos.x, pos.y, game.card_width, game.card_height };
+		if (point_in_rect(mx, my, rect)) {
+			return &game.foundations[i];
+		} 
+	}
+
+	for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
+		pos = game.tableau[i].pos;
+		rect = (oc_rect){ pos.x, pos.y, game.card_width, game.card_height };
+		if (point_in_rect(mx, my, rect)) {
+			return &game.tableau[i];
+		}
+	}
+
+	return NULL;
+}
+
+// returns the card the mouse is currently over
+// if a card is currently being dragged, this card is ignored and the card
+// behind is returned instead
 static Card *get_hovered_card(void) {
 	f32 mx = game.mouse_input.x;
 	f32 my = game.mouse_input.y;
 	f32 y_top_row = game.stock.pos.y;
+	Card *drag_card = game.card_dragging;
 	
 	// if mouse is in row with stock and foundations
 	if (my >= y_top_row && my < y_top_row + game.card_height) {
 		// check stock
 		Card *stock_top = oc_list_first_entry(game.stock.cards, Card, node);
-		if (point_in_card_bounds(mx, my, stock_top)) {
+		bool top_is_drag_card = stock_top && stock_top == drag_card;
+		if (!top_is_drag_card && point_in_card_bounds(mx, my, stock_top)) {
 			return stock_top;
 		} 
 
 		// check waste
 		Card *waste_top = oc_list_first_entry(game.waste.cards, Card, node);
-		if (point_in_card_bounds(mx, my, waste_top)) {
+		top_is_drag_card = waste_top && waste_top == drag_card;
+		if (!top_is_drag_card && point_in_card_bounds(mx, my, waste_top)) {
 			return waste_top;
 		}
 				
 		// check foundations
 		for (i32 i=0; i<ARRAY_COUNT(game.foundations); ++i) {
 			Card *foundation_top = oc_list_first_entry(game.foundations[i].cards, Card, node);
+			if (foundation_top && foundation_top == drag_card) continue;
 			if (point_in_card_bounds(mx, my, foundation_top)) {
 				return foundation_top;
 			}
@@ -436,6 +507,7 @@ static Card *get_hovered_card(void) {
 		for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
 			oc_list_for(game.tableau[i].cards, card, Card, node) {
 				if (!card->face_up) break;
+				if (card == drag_card) continue;
 				if (point_in_card_bounds(mx, my, card)) {
 					return card;
 				}
@@ -446,16 +518,51 @@ static Card *get_hovered_card(void) {
 	return NULL;
 }
 
+static bool opposite_color_suits(Card *a, Card *b) {
+	if (a->suit == SUIT_CLUB || a->suit == SUIT_SPADE) {
+		return b->suit == SUIT_DIAMOND || b->suit == SUIT_HEART;
+	} else {
+		return b->suit == SUIT_CLUB || b->suit == SUIT_SPADE;
+	}
+}
+
 // is it legal to drag this card and those on top of it?
 static bool can_drag(Card *card) {
 	for (oc_list_elt *node = card->node.prev; node; node = node->prev) {
 		Card *prev_card = oc_list_entry(node, Card, node);
-		if (card->kind - prev_card->kind != 1) {
+		if (!opposite_color_suits(card, prev_card) || (card->kind - prev_card->kind != 1)) {
 			return false;
 		}
 		card = prev_card;
 	}
 	return card->face_up;
+}
+
+static bool can_drop_empty_pile(Card *card, Pile *pile) {
+	bool result = false;
+	if (oc_list_empty(pile->cards)) {
+		if (pile->kind == PILE_FOUNDATION) {
+			result = card->kind == CARD_ACE;
+		} else if (pile->kind == PILE_TABLEAU) {
+			result = true;
+		}
+	} 
+	return result;
+}
+
+static bool can_drop(Card *card, Card *target) {
+	assert(target);
+	bool result = false;
+	Pile *pile = target->pile;
+	if (pile->kind == PILE_FOUNDATION) {
+		result = (card->suit == target->suit) && 
+		         (card->kind == target->kind + 1) &&
+				 (card->node.prev == NULL);
+	} else if (pile->kind == PILE_TABLEAU) {
+		result = opposite_color_suits(card, target) && 
+		        (card->kind == target->kind - 1);
+	}
+	return result;
 }
 
 static void solitaire_update(void) {
@@ -486,11 +593,7 @@ static void solitaire_update(void) {
 		} else {
 			// if empty stock clicked, move all waste to stock
 			if (oc_list_empty(game.stock.cards)) {
-				oc_rect stock_rect = { 
-					game.stock.pos.x, 
-					game.stock.pos.y, 
-					game.stock.pos.x + game.card_width,
-					game.stock.pos.y + game.card_height };
+				oc_rect stock_rect = { game.stock.pos.x, game.stock.pos.y, game.card_width, game.card_height };
 				if (point_in_rect(game.mouse_input.x, game.mouse_input.y, stock_rect)) {
 					Card *card = oc_list_pop_entry(&game.waste.cards, Card, node); 
 					while (card) {
@@ -504,14 +607,29 @@ static void solitaire_update(void) {
 
 	} else if (mouse_released) {
 		if (game.card_dragging) {
-			// if it is released on another card, place it on that pile if possible
+			Card *target = get_hovered_card();
+			bool return_cards = true;
 
-
-			// else return the cards to pile they were on previously
-			for (oc_list_elt *node = &game.card_dragging->node; node; node = node->prev) {
-				Card *card = oc_list_entry(node, Card, node);
-				card->pos = card->pos_before_drag;
+			if (target) {
+				if (can_drop(game.card_dragging, target)) {
+					pile_push(target->pile, game.card_dragging);
+					return_cards = false;
+				}
+			} else {
+				Pile *pile = get_hovered_pile();
+				if (pile && can_drop_empty_pile(game.card_dragging, pile)) {
+					pile_push(pile, game.card_dragging);
+					return_cards = false;
+				}
 			}
+
+			if (return_cards) {
+				for (oc_list_elt *node = &game.card_dragging->node; node; node = node->prev) {
+					Card *card = oc_list_entry(node, Card, node);
+					card->pos = card->pos_before_drag;
+				}
+			}
+	
 			game.card_dragging = NULL;
 		}
 	}
@@ -524,10 +642,6 @@ static void solitaire_update(void) {
 			card->pos.y = game.mouse_input.y - card->drag_offset.y;
 		}
 	}
-
-	// if mouse released while dragging a card
-	    // if it is released on another card, place it on that pile if possible
-		// else return the card to pile it was on previously
 
 	// check for win condition
 
