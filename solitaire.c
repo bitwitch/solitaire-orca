@@ -388,6 +388,7 @@ static Card *get_hovered_card(void) {
 
 	} else {
 		// check tableau
+		// NOTE: ignores face down cards
 		for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
 			oc_list_for(game.tableau[i].cards, card, Card, node) {
 				if (!card->face_up) break;
@@ -401,8 +402,16 @@ static Card *get_hovered_card(void) {
 	return NULL;
 }
 
+// is it legal to drag this card and those on top of it?
 static bool can_drag(Card *card) {
-	return true;
+	for (oc_list_elt *node = card->node.prev; node; node = node->prev) {
+		Card *prev_card = oc_list_entry(node, Card, node);
+		if (card->kind - prev_card->kind != 1) {
+			return false;
+		}
+		card = prev_card;
+	}
+	return card->face_up;
 }
 
 static void solitaire_update(void) {
