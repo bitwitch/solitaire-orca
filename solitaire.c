@@ -766,6 +766,14 @@ static void solitaire_update(void) {
 					Card *card = oc_list_entry(node, Card, node);
 					card->pos = card->pos_before_drag;
 				}
+			} else {
+				// if a card at the top of tableau has been revealed turn it over
+				for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
+					Card *top = pile_peek_top(&game.tableau[i]);
+					if (top && !top->face_up) {
+						top->face_up = true;
+					}
+				}
 			}
 	
 			game.card_dragging = NULL;
