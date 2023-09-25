@@ -846,7 +846,11 @@ static void solitaire_update(void) {
 
 			// clicking on a card transfers it to foundation if possible
 			if (card_clicked) {
-				if (game.card_dragging->pile->kind != PILE_FOUNDATION) {
+				bool valid_auto_transfer_candidate = 
+					game.card_dragging->pile->kind != PILE_FOUNDATION && 
+					game.card_dragging->node.prev == NULL;
+
+				if (valid_auto_transfer_candidate) {
 					CardKind drag_kind = game.card_dragging->kind;
 					Suit drag_suit = game.card_dragging->suit;
 					for (i32 i=0; i<ARRAY_COUNT(game.foundations); ++i) {
