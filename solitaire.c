@@ -58,17 +58,28 @@ typedef struct {
 } Card;
 
 typedef struct {
+	bool down, was_down;
+} DigitalInput;
+
+typedef struct {
     float x;
     float y;
     float deltaX;
     float deltaY;
-    bool down, was_down;
+	DigitalInput left;
 } MouseInput;
 
 typedef struct {
+	DigitalInput r;
+} Input;
+
+typedef struct {
+	bool win;
 	oc_surface surface;
 	oc_canvas canvas;
+	oc_font font;
 	MouseInput mouse_input;
+	Input input;
 
 	oc_vec2 frame_size;
 	oc_vec2 board_margin;
@@ -129,6 +140,7 @@ static void load_card_images(void) {
 	game.card_backs[4] = oc_image_create_from_path(game.surface, OC_STR8("Card-Back-04.png"), false);
 	game.card_backs[5] = oc_image_create_from_path(game.surface, OC_STR8("Card-Back-05_small.png"), false);
 	game.spritesheet = oc_image_create_from_path(game.surface, OC_STR8("classic_13x4x280x390_compressed.png"), false);
+
 
 	u32 card_width = 280; 
 	u32 card_height = 390;
@@ -225,9 +237,9 @@ static Card *pile_peek_top(Pile *pile) {
 }
 
 static void pile_push(Pile *pile, Card *card) {
-	oc_list_push(&pile->cards, &card->node);
-	card->pile = pile;
 	position_card_on_top_of_pile(card, pile);
+	card->pile = pile;
+	oc_list_push(&pile->cards, &card->node);
 }
 
 // this is basically moving a sublist from one list to another
@@ -313,6 +325,23 @@ static void deal_klondike(Card *cards, i32 num_cards) {
 	}
 }
 
+static void game_reset(void) {
+	game.win = false;
+	game.card_dragging = false;
+	memset(&game.mouse_input, 0, sizeof(game.mouse_input));
+	memset(&game.input, 0, sizeof(game.input));
+	oc_list_init(&game.stock.cards);
+	oc_list_init(&game.waste.cards);
+	for (i32 i=0; i<ARRAY_COUNT(game.foundations); ++i) {
+		oc_list_init(&game.foundations[i].cards);
+	}
+	for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
+		oc_list_init(&game.tableau[i].cards);
+	}
+
+	deal_klondike(game.cards, ARRAY_COUNT(game.cards));
+}
+
 ORCA_EXPORT void oc_on_init(void) {
 	// initialize random number generator
 	f64 ftime = oc_clock_time(OC_CLOCK_MONOTONIC);
@@ -322,6 +351,16 @@ ORCA_EXPORT void oc_on_init(void) {
     oc_window_set_title(OC_STR8("Solitaire"));
     game.surface = oc_surface_canvas();
     game.canvas = oc_canvas_create();
+
+    oc_unicode_range ranges[5] = {
+        OC_UNICODE_BASIC_LATIN,
+        OC_UNICODE_C1_CONTROLS_AND_LATIN_1_SUPPLEMENT,
+        OC_UNICODE_LATIN_EXTENDED_A,
+        OC_UNICODE_LATIN_EXTENDED_B,
+        OC_UNICODE_SPECIALS,
+    };
+	game.font = oc_font_create_from_path(OC_STR8("segoeui.ttf"), 5, ranges);
+
 	oc_vec2 viewport_size = { 1000, 750 };
 	set_sizes_based_on_viewport(viewport_size.x, viewport_size.y);
 	oc_window_set_size(viewport_size);
@@ -472,6 +511,28 @@ static void draw_test_deck(Card *cards, i32 num_cards) {
 	}
 }
 
+oc_str8 WIN_TEXT = OC_STR8_LIT("YOU WIN!");
+
+static void draw_win_text(void) {
+	f32 font_size = 64;
+	f32 padding = 50;
+	oc_set_font(game.font);
+	oc_set_font_size(font_size);
+	oc_text_metrics metrics = oc_font_text_metrics(game.font, font_size, WIN_TEXT);
+	f32 x = 0.5f * (game.frame_size.x - metrics.ink.w);
+	f32 y = 0.5f * (game.frame_size.y + metrics.ink.h);
+
+	oc_set_color_rgba(0, 0, 0, 0.75); 
+	oc_rectangle_fill(
+		x - padding, 
+		y - metrics.ink.h - padding, 
+		metrics.ink.w + 2.0f * padding, 
+		metrics.ink.h + 2.0f * padding);
+
+	oc_set_color_rgba(1, 1, 1, 1);
+	oc_text_fill(x, y, WIN_TEXT);
+}
+
 static void solitaire_draw(void) {
     oc_canvas_select(game.canvas);
     oc_set_color_rgba(10.0f / 255.0f, 31.0f / 255.0f, 72.0f / 255.0f, 1);
@@ -484,6 +545,10 @@ static void solitaire_draw(void) {
 
 	draw_dragging();
 
+	if (game.win) {
+		draw_win_text();
+	}
+
     oc_surface_select(game.surface);
     oc_render(game.canvas);
     oc_surface_present(game.surface);
@@ -492,6 +557,14 @@ static void solitaire_draw(void) {
 //------------------------------------------------------------------------------
 // Game Logic
 //------------------------------------------------------------------------------
+
+static inline bool pressed(DigitalInput button) {
+	return button.down && !button.was_down;
+}
+
+static inline bool released(DigitalInput button) {
+	return !button.down && button.was_down;
+}
 
 static bool point_in_rect(f32 x, f32 y, oc_rect rect) {
 	return x >= rect.x && x < rect.x + rect.w &&
@@ -702,7 +775,7 @@ static void print_card_info(Card *card) {
 		next ? describe_suit(next->suit) : "none");
 }
 
-bool game_win(void) {
+static bool is_game_won(void) {
 	bool win = true;
 	for (i32 i=0; i<ARRAY_COUNT(game.foundations); ++i) {
 		Card *top = pile_peek_top(&game.foundations[i]);
@@ -714,11 +787,13 @@ bool game_win(void) {
 	return win;
 }
 
-static void solitaire_update(void) {
-	bool mouse_pressed = game.mouse_input.down && !game.mouse_input.was_down;
-	bool mouse_released = !game.mouse_input.down && game.mouse_input.was_down;
+static void end_frame_input(void) {
+	game.mouse_input.left.was_down = game.mouse_input.left.down;
+	game.input.r.was_down = game.input.r.down;
+}
 
-	if (mouse_pressed) {
+static void solitaire_update(void) {
+	if (pressed(game.mouse_input.left)) {
 		Card *clicked_card = get_hovered_card();
 
 		if (clicked_card) {
@@ -755,7 +830,7 @@ static void solitaire_update(void) {
 			}
 		}
 
-	} else if (mouse_released) {
+	} else if (released(game.mouse_input.left)) {
 		if (game.card_dragging) {
 			Card *target = get_hovered_card();
 			bool move_success = false;
@@ -782,9 +857,9 @@ static void solitaire_update(void) {
 					}
 				}
 
-				if (game_win()) {
-					oc_log_info("\n\n\n^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v\n~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*\n\n                    YOU WIN!\n\n~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*\n^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v");
-					oc_request_quit();
+				if (is_game_won()) {
+					game.win = true;
+					oc_log_info("YOU WIN!");
 				}
 			} else {
 				// return cards to previous position
@@ -807,19 +882,31 @@ static void solitaire_update(void) {
 		}
 	}
 
-	// check for win condition
+	if (pressed(game.input.r)) {
+		game_reset();
+	}
 
-	// TODO: if card is double clicked, move to foundation if possible and there is an open place for it
-	
-	game.mouse_input.was_down = game.mouse_input.down;
+	end_frame_input();
+}
+
+ORCA_EXPORT void oc_on_key_down(oc_scan_code scan, oc_key_code key) {
+    if(key == OC_KEY_R) {
+        game.input.r.down = true;
+    }
+}
+
+ORCA_EXPORT void oc_on_key_up(oc_scan_code scan, oc_key_code key) {
+    if(key == OC_KEY_R) {
+        game.input.r.down = false;
+    }
 }
 
 ORCA_EXPORT void oc_on_mouse_down(int button) {
-    game.mouse_input.down = true;
+    game.mouse_input.left.down = true;
 }
 
 ORCA_EXPORT void oc_on_mouse_up(int button) {
-    game.mouse_input.down = false;
+    game.mouse_input.left.down = false;
 }
 
 ORCA_EXPORT void oc_on_mouse_move(float x, float y, float dx, float dy) {
