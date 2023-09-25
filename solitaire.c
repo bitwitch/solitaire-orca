@@ -1,7 +1,10 @@
 #include <assert.h>
 #include <orca.h>
 
+#include "random.c"
+
 #define CARD_ASPECT (560.0f/780.0f)
+#define STOCK_OFFSET_BETWEEN_CARDS 0.5
 #define ARRAY_COUNT(array) sizeof(array) / sizeof(*(array))
 
 typedef enum {
@@ -89,6 +92,8 @@ typedef struct {
 GameState game;
 
 static void print_card_info(Card *card);
+static char *describe_suit(Suit suit);
+static char *describe_card_kind(CardKind kind);
 
 void set_sizes_based_on_viewport(u32 width, u32 height) {
     game.frame_size.x = width;
@@ -146,8 +151,8 @@ static void position_card_on_top_of_pile(Card *card, Pile *pile) {
 	case PILE_STOCK: {
 		Card *top = oc_list_first_entry(pile->cards, Card, node);
 		if (top) {
-			card->pos.x = top->pos.x - 1;
-			card->pos.y = top->pos.y - 1;
+			card->pos.x = top->pos.x - STOCK_OFFSET_BETWEEN_CARDS;
+			card->pos.y = top->pos.y - STOCK_OFFSET_BETWEEN_CARDS;
 		} else {
 			card->pos = pile->pos;
 		}
@@ -184,11 +189,11 @@ static void position_all_cards_on_pile(Pile *pile) {
 		break;
 	}
 	case PILE_STOCK: {
-		i32 offset = 0;
+		f32 offset = 0;
 		oc_list_for_reverse(pile->cards, card, Card, node) {
 			card->pos.x = pile->pos.x - offset;
 			card->pos.y = pile->pos.y - offset;
-			++offset;
+			offset += STOCK_OFFSET_BETWEEN_CARDS;
 		}
 		break;
 	}
@@ -262,6 +267,15 @@ static void pile_transfer(Pile *target_pile, Card *card) {
 	}
 }
 
+static void shuffle_deck(Card *cards, i32 num_cards) {
+	for (i32 i=num_cards-1; i > 0; --i) {
+		i32 j = (i32)rand_range_u32(0, i);
+		Card tmp = cards[i];
+		cards[i] = cards[j];
+		cards[j] = tmp;
+	}
+}
+
 static void deal_klondike(Card *cards, i32 num_cards) {
 	assert(SUIT_COUNT * CARD_KIND_COUNT == num_cards);
 
@@ -273,7 +287,7 @@ static void deal_klondike(Card *cards, i32 num_cards) {
 		card->kind = kind;
 	}
 
-	// shuffle_deck(cards, num_cards);
+	shuffle_deck(cards, num_cards);
 
 	// put all cards in stock
 	for (i32 i=0; i<num_cards; ++i) {
@@ -293,30 +307,18 @@ static void deal_klondike(Card *cards, i32 num_cards) {
 		}
 
 		// deal 1 card face up
-		// TODO: DELETE LOOP
-		for (i32 j=0; j<3; ++j) {
-			Card *card = pile_peek_top(&game.stock);
-			card->face_up = true;
-			pile_transfer(&game.tableau[i], card);
-		}
-	}
-	
-	// TODO: DELETE MEE: put some cards in waste and foundations for testing
-	for (i32 j=0; j<3; ++j) {
 		Card *card = pile_peek_top(&game.stock);
 		card->face_up = true;
-		pile_transfer(&game.waste, card);
-
-		card = pile_peek_top(&game.stock);
-		card->face_up = true;
-		pile_transfer(&game.foundations[j], card);
+		pile_transfer(&game.tableau[i], card);
 	}
 }
 
-
-
-
 ORCA_EXPORT void oc_on_init(void) {
+	// initialize random number generator
+	f64 ftime = oc_clock_time(OC_CLOCK_MONOTONIC);
+	u64 time = *((u64*)&ftime);
+	pcg32_init(time);
+
     oc_window_set_title(OC_STR8("Solitaire"));
     game.surface = oc_surface_canvas();
     game.canvas = oc_canvas_create();
