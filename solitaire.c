@@ -71,6 +71,7 @@ typedef struct {
 
 typedef struct {
 	DigitalInput r;
+	DigitalInput num1, num2, num3, num4, num5;
 } Input;
 
 typedef struct {
@@ -93,7 +94,7 @@ typedef struct {
 
 	Card *card_dragging;
 	
-	oc_image spritesheet, card_backs[6];
+	oc_image spritesheet, card_backs[5];
 	u32 selected_card_back;
 	oc_rect card_sprite_rects[SUIT_COUNT][CARD_KIND_COUNT]; 
 	Card cards[SUIT_COUNT*CARD_KIND_COUNT];
@@ -138,7 +139,6 @@ static void load_card_images(void) {
 	game.card_backs[2] = oc_image_create_from_path(game.surface, OC_STR8("Card-Back-02.png"), false);
 	game.card_backs[3] = oc_image_create_from_path(game.surface, OC_STR8("Card-Back-03.png"), false);
 	game.card_backs[4] = oc_image_create_from_path(game.surface, OC_STR8("Card-Back-04.png"), false);
-	game.card_backs[5] = oc_image_create_from_path(game.surface, OC_STR8("Card-Back-05_small.png"), false);
 	game.spritesheet = oc_image_create_from_path(game.surface, OC_STR8("classic_13x4x280x390_compressed.png"), false);
 
 
@@ -366,7 +366,7 @@ ORCA_EXPORT void oc_on_init(void) {
 	oc_window_set_size(viewport_size);
 
 	load_card_images();
-	game.selected_card_back = 5;
+	game.selected_card_back = 0;
 
 	game.stock.kind = PILE_STOCK;
 	game.waste.kind = PILE_WASTE;
@@ -882,6 +882,18 @@ static void solitaire_update(void) {
 		}
 	}
 
+	if (pressed(game.input.num1)) {
+		game.selected_card_back = 0;
+	} else if (pressed(game.input.num2)) {
+		game.selected_card_back = 1;
+	} else if (pressed(game.input.num3)) {
+		game.selected_card_back = 2;
+	} else if (pressed(game.input.num4)) {
+		game.selected_card_back = 3;
+	} else if (pressed(game.input.num5)) {
+		game.selected_card_back = 4;
+	}
+
 	if (pressed(game.input.r)) {
 		game_reset();
 	}
@@ -890,23 +902,42 @@ static void solitaire_update(void) {
 }
 
 ORCA_EXPORT void oc_on_key_down(oc_scan_code scan, oc_key_code key) {
-    if(key == OC_KEY_R) {
-        game.input.r.down = true;
-    }
+	switch (key) {
+	case OC_KEY_R: game.input.r.down = true;    break;
+	case OC_KEY_1: game.input.num1.down = true; break;
+	case OC_KEY_2: game.input.num2.down = true; break;
+	case OC_KEY_3: game.input.num3.down = true; break;
+	case OC_KEY_4: game.input.num4.down = true; break;
+	case OC_KEY_5: game.input.num5.down = true; break;
+	default:
+		break;
+	}
+
 }
 
 ORCA_EXPORT void oc_on_key_up(oc_scan_code scan, oc_key_code key) {
-    if(key == OC_KEY_R) {
-        game.input.r.down = false;
-    }
+	switch (key) {
+	case OC_KEY_R: game.input.r.down = false;    break;
+	case OC_KEY_1: game.input.num1.down = false; break;
+	case OC_KEY_2: game.input.num2.down = false; break;
+	case OC_KEY_3: game.input.num3.down = false; break;
+	case OC_KEY_4: game.input.num4.down = false; break;
+	case OC_KEY_5: game.input.num5.down = false; break;
+	default:
+		break;
+	}
 }
 
 ORCA_EXPORT void oc_on_mouse_down(int button) {
-    game.mouse_input.left.down = true;
+	if (button == OC_MOUSE_LEFT) {
+		game.mouse_input.left.down = true;
+	}
 }
 
 ORCA_EXPORT void oc_on_mouse_up(int button) {
-    game.mouse_input.left.down = false;
+	if (button == OC_MOUSE_LEFT) {
+		game.mouse_input.left.down = false;
+	}
 }
 
 ORCA_EXPORT void oc_on_mouse_move(float x, float y, float dx, float dy) {
