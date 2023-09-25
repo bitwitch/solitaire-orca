@@ -1,11 +1,13 @@
 #include <assert.h>
 #include <orca.h>
+#include <math.h>
 
 #include "random.c"
 
+#define ARRAY_COUNT(array) sizeof(array) / sizeof(*(array))
 #define CARD_ASPECT (560.0f/780.0f)
 #define STOCK_OFFSET_BETWEEN_CARDS 0.5
-#define ARRAY_COUNT(array) sizeof(array) / sizeof(*(array))
+#define MAX_DIST_CONSIDERED_CLICK 2.0f 
 
 typedef enum {
 	PILE_NONE,
@@ -106,6 +108,12 @@ GameState game;
 static void print_card_info(Card *card);
 static char *describe_suit(Suit suit);
 static char *describe_card_kind(CardKind kind);
+
+f32 vec2_dist(oc_vec2 v1, oc_vec2 v2) {
+	f32 a = v2.x - v1.x;
+	f32 b = v2.y - v1.y;
+	return sqrtf(a*a + b*b);
+}
 
 void set_sizes_based_on_viewport(u32 width, u32 height) {
     game.frame_size.x = width;
@@ -832,19 +840,48 @@ static void solitaire_update(void) {
 
 	} else if (released(game.mouse_input.left)) {
 		if (game.card_dragging) {
-			Card *target = get_hovered_card();
 			bool move_success = false;
+			f32 drag_dist = vec2_dist(game.card_dragging->pos, game.card_dragging->pos_before_drag);
+			bool card_clicked = drag_dist <= MAX_DIST_CONSIDERED_CLICK;
 
-			if (target) {
-				if (can_drop(game.card_dragging, target)) {
-					pile_transfer(target->pile, game.card_dragging);
-					move_success = true;
+			// clicking on a card transfers it to foundation if possible
+			if (card_clicked) {
+				if (game.card_dragging->pile->kind != PILE_FOUNDATION) {
+					CardKind drag_kind = game.card_dragging->kind;
+					Suit drag_suit = game.card_dragging->suit;
+					for (i32 i=0; i<ARRAY_COUNT(game.foundations); ++i) {
+						bool auto_transfer = false;
+						Card *top = pile_peek_top(&game.foundations[i]);
+						if (top) {
+							if ((top->suit == drag_suit) && (top->kind == drag_kind - 1)) {
+								auto_transfer = true;
+							}
+						} else if (drag_kind == CARD_ACE) {
+							auto_transfer = true;
+						}
+
+						if (auto_transfer) {
+							pile_transfer(&game.foundations[i], game.card_dragging);
+							move_success = true;
+							break;
+						}
+					}
 				}
+
 			} else {
-				Pile *pile = get_hovered_pile();
-				if (pile && can_drop_empty_pile(game.card_dragging, pile)) {
-					pile_transfer(pile, game.card_dragging);
-					move_success = true;
+				Card *target = get_hovered_card();
+
+				if (target) {
+					if (can_drop(game.card_dragging, target)) {
+						pile_transfer(target->pile, game.card_dragging);
+						move_success = true;
+					}
+				} else {
+					Pile *pile = get_hovered_pile();
+					if (pile && can_drop_empty_pile(game.card_dragging, pile)) {
+						pile_transfer(pile, game.card_dragging);
+						move_success = true;
+					}
 				}
 			}
 
