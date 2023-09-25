@@ -702,6 +702,18 @@ static void print_card_info(Card *card) {
 		next ? describe_suit(next->suit) : "none");
 }
 
+bool game_win(void) {
+	bool win = true;
+	for (i32 i=0; i<ARRAY_COUNT(game.foundations); ++i) {
+		Card *top = pile_peek_top(&game.foundations[i]);
+		if (!top || top->kind != CARD_KING) {
+			win = false;
+			break;
+		}
+	}
+	return win;
+}
+
 static void solitaire_update(void) {
 	bool mouse_pressed = game.mouse_input.down && !game.mouse_input.was_down;
 	bool mouse_released = !game.mouse_input.down && game.mouse_input.was_down;
@@ -746,33 +758,39 @@ static void solitaire_update(void) {
 	} else if (mouse_released) {
 		if (game.card_dragging) {
 			Card *target = get_hovered_card();
-			bool return_cards = true;
+			bool move_success = false;
 
 			if (target) {
 				if (can_drop(game.card_dragging, target)) {
 					pile_transfer(target->pile, game.card_dragging);
-					return_cards = false;
+					move_success = true;
 				}
 			} else {
 				Pile *pile = get_hovered_pile();
 				if (pile && can_drop_empty_pile(game.card_dragging, pile)) {
 					pile_transfer(pile, game.card_dragging);
-					return_cards = false;
+					move_success = true;
 				}
 			}
 
-			if (return_cards) {
-				for (oc_list_elt *node = &game.card_dragging->node; node; node = node->prev) {
-					Card *card = oc_list_entry(node, Card, node);
-					card->pos = card->pos_before_drag;
-				}
-			} else {
+			if (move_success) {
 				// if a card at the top of tableau has been revealed turn it over
 				for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
 					Card *top = pile_peek_top(&game.tableau[i]);
 					if (top && !top->face_up) {
 						top->face_up = true;
 					}
+				}
+
+				if (game_win()) {
+					oc_log_info("\n\n\n^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v\n~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*\n\n                    YOU WIN!\n\n~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*\n^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v^v");
+					oc_request_quit();
+				}
+			} else {
+				// return cards to previous position
+				for (oc_list_elt *node = &game.card_dragging->node; node; node = node->prev) {
+					Card *card = oc_list_entry(node, Card, node);
+					card->pos = card->pos_before_drag;
 				}
 			}
 	
