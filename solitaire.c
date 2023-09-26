@@ -149,7 +149,6 @@ static void load_card_images(void) {
 	game.card_backs[4] = oc_image_create_from_path(game.surface, OC_STR8("Card-Back-04.png"), false);
 	game.spritesheet = oc_image_create_from_path(game.surface, OC_STR8("classic_13x4x280x390_compressed.png"), false);
 
-
 	u32 card_width = 280; 
 	u32 card_height = 390;
 	u32 rows = 4;
@@ -293,6 +292,55 @@ static void shuffle_deck(Card *cards, i32 num_cards) {
 		Card tmp = cards[i];
 		cards[i] = cards[j];
 		cards[j] = tmp;
+	}
+}
+
+static void test_deal_for_autocomplete(Card *cards, i32 num_cards) {
+	assert(SUIT_COUNT * CARD_KIND_COUNT == num_cards);
+	i32 index = 0;
+	
+	Suit suit_even = SUIT_DIAMOND;
+	Suit suit_odd = SUIT_CLUB;
+	for (i32 kind=CARD_KING; kind >= CARD_ACE; --kind) {
+		Card *card = &cards[index++];
+		memset(card, 0, sizeof(*card));
+		card->face_up = true;
+		card->suit = (kind % 2) == 0 ? suit_even : suit_odd;
+		card->kind = kind;
+		pile_push(&game.tableau[0], card);
+	}
+
+	suit_even = SUIT_CLUB;
+	suit_odd = SUIT_DIAMOND;
+	for (i32 kind=CARD_KING; kind >= CARD_ACE; --kind) {
+		Card *card = &cards[index++];
+		memset(card, 0, sizeof(*card));
+		card->face_up = true;
+		card->suit = (kind % 2) == 0 ? suit_even : suit_odd;
+		card->kind = kind;
+		pile_push(&game.tableau[1], card);
+	}
+
+	suit_even = SUIT_HEART;
+	suit_odd = SUIT_SPADE;
+	for (i32 kind=CARD_KING; kind >= CARD_ACE; --kind) {
+		Card *card = &cards[index++];
+		memset(card, 0, sizeof(*card));
+		card->face_up = true;
+		card->suit = (kind % 2) == 0 ? suit_even : suit_odd;
+		card->kind = kind;
+		pile_push(&game.tableau[2], card);
+	}
+
+	suit_even = SUIT_SPADE;
+	suit_odd = SUIT_HEART;
+	for (i32 kind=CARD_KING; kind >= CARD_ACE; --kind) {
+		Card *card = &cards[index++];
+		memset(card, 0, sizeof(*card));
+		card->face_up = true;
+		card->suit = (kind % 2) == 0 ? suit_even : suit_odd;
+		card->kind = kind;
+		pile_push(&game.tableau[3], card);
 	}
 }
 
@@ -800,6 +848,55 @@ static void end_frame_input(void) {
 	game.input.r.was_down = game.input.r.down;
 }
 
+static bool is_tableau_empty(void) {
+	for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
+		if (!oc_list_empty(game.tableau[i].cards)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static void autocomplete_if_possible(void) {
+	if (!oc_list_empty(game.stock.cards) || !oc_list_empty(game.waste.cards)) {
+		return;
+	}
+
+	for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
+		Pile *pile = &game.tableau[i];
+		oc_list_for_reverse(pile->cards, card, Card, node) {
+			if (!card->face_up) {
+				return;
+			}	
+			Card *prev = oc_list_prev_entry(pile->cards, card, Card, node);
+			if (prev && prev->kind != card->kind - 1) {
+				return;
+			}
+		}
+	}
+
+	// if we made it here, go ahead and perform autocomplete
+	oc_log_info("autocompleting");
+	while (!is_tableau_empty()) {
+		for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
+			Card *tableau_top = pile_peek_top(&game.tableau[i]);
+			if (!tableau_top) continue;
+			for (i32 j=0; j<ARRAY_COUNT(game.foundations); ++j) {
+				Card *foundation_top = pile_peek_top(&game.foundations[j]);
+				if (foundation_top) {
+					if (tableau_top->suit == foundation_top->suit &&
+						tableau_top->kind == foundation_top->kind + 1)
+					{
+						pile_transfer(&game.foundations[j], tableau_top);
+					}
+				} else if (tableau_top->kind == CARD_ACE){
+					pile_transfer(&game.foundations[j], tableau_top);
+				}
+			}
+		}
+	}
+}
+
 static void solitaire_update(void) {
 	if (pressed(game.mouse_input.left)) {
 		Card *clicked_card = get_hovered_card();
@@ -872,6 +969,7 @@ static void solitaire_update(void) {
 					}
 				}
 
+			// dropping a dragged card
 			} else {
 				Card *target = get_hovered_card();
 
@@ -897,6 +995,8 @@ static void solitaire_update(void) {
 						top->face_up = true;
 					}
 				}
+
+				autocomplete_if_possible();
 
 				if (is_game_won()) {
 					game.win = true;
