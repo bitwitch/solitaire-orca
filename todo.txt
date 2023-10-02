@@ -1,0 +1,24 @@
+TODO:
+[ ] animate cards when moving to new target
+[ ] animation on game end (oldschool windows solitaire style)
+[ ] add some sound
+[ ] make right click also auto transfer cards to foundation (nova said old solitaire
+    on windows used right click) 
+[ ] restart button (maybe, we already have r key to restart)
+
+
+DONE:
+[X] allow the dragging card to act as hitbox when dropping on a new pile instead
+		of the mouse. sometimes it feels bad when the card is being dropped on the
+    new pile, but the mouse position is not intersecting the new pile
+[X] if all cards are turned face up and all cards in tableau are in order,
+    autocomplete
+[X] allow user to change card backs
+[X] on screen resize, need to recalculate all cards positions
+[X] moving a card from tableau into foundation works, but then you cannot move the
+    card on foundation anymore (moving from waste to foundation works fine and you
+	  can move then card on foundation)
+	  also you cant put the next card on top of it (i test with gettng up to 6 and 7
+    wouldnt go)
+[X] if card is clicked (not dragged) move it to foundation if valid
+

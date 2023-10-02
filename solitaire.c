@@ -622,9 +622,16 @@ static inline bool released(DigitalInput button) {
 	return !button.down && button.was_down;
 }
 
-static bool point_in_rect(f32 x, f32 y, oc_rect rect) {
+static inline bool point_in_rect(f32 x, f32 y, oc_rect rect) {
 	return x >= rect.x && x < rect.x + rect.w &&
 	       y >= rect.y && y < rect.y + rect.h;
+}
+
+static inline bool rect_in_rect(oc_rect a, oc_rect b) {
+	return point_in_rect(a.x, a.y, b)       ||
+	       point_in_rect(a.x + a.w, a.y, b) ||
+	       point_in_rect(a.x, a.y + a.h, b) ||
+	       point_in_rect(a.x + a.w, a.y + a.h, b);
 }
 
 static bool point_in_card_bounds(f32 x, f32 y, Card *card) {
@@ -667,6 +674,14 @@ static Pile *get_hovered_pile(void) {
 	}
 
 	return NULL;
+}
+
+// TODO(shaw): figure out how to handle multiple collisions
+static Card *get_collision_card(Card *card) {
+	Card *result = NULL;
+
+
+	return result;
 }
 
 // returns the card the mouse is currently over
@@ -765,6 +780,72 @@ static bool can_drop(Card *card, Card *target) {
 	}
 	return result;
 }
+
+static bool can_drop_card_on_pile(Pile *pile, Card *card) {
+	oc_rect card_rect = {
+		.x = card->pos.x, 
+		.y = card->pos.y,
+		.w = game.card_width,
+		.h = game.card_height 
+	};
+
+	// check empty card
+	if (oc_list_empty(pile->cards)) {
+		oc_rect pile_rect = {
+			.x = pile->pos.x, 
+			.y = pile->pos.y,
+			.w = game.card_width,
+			.h = game.card_height };
+		if (rect_in_rect(card_rect, pile_rect) &&
+		    can_drop_empty_pile(card, pile))
+		{
+			return true;
+		}
+
+	// check top card
+	} else {
+		Card *top = oc_list_first_entry(pile->cards, Card, node);
+		oc_rect top_rect = {
+			.x = top->pos.x, 
+			.y = top->pos.y,
+			.w = game.card_width,
+			.h = game.card_height 
+		};
+		if (top != card && 
+			rect_in_rect(card_rect, top_rect) &&
+		    can_drop(card, top))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+static bool maybe_drop_dragged_card(void) {
+	Card *drag_card = game.card_dragging;
+
+	// check foundations
+	for (i32 i=0; i<ARRAY_COUNT(game.foundations); ++i) {
+		Pile *pile = &game.foundations[i]; 
+		if (can_drop_card_on_pile(pile, drag_card)) {
+			pile_transfer(pile, drag_card);
+			return true;
+		}
+	}
+
+	// check tableau
+	for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
+		Pile *pile = &game.tableau[i];
+		if (can_drop_card_on_pile(pile, drag_card)) {
+			pile_transfer(pile, drag_card);
+			return true;
+		}
+	}
+
+	return false;
+}
+
 
 static char *describe_suit(Suit suit) {
 	switch (suit) {
@@ -937,7 +1018,7 @@ static void solitaire_update(void) {
 
 	} else if (released(game.mouse_input.left)) {
 		if (game.card_dragging) {
-			bool move_success = false;
+			bool move_success = false; // default to false
 			f32 drag_dist = vec2_dist(game.card_dragging->pos, game.card_dragging->pos_before_drag);
 			bool card_clicked = drag_dist <= MAX_DIST_CONSIDERED_CLICK;
 
@@ -971,20 +1052,7 @@ static void solitaire_update(void) {
 
 			// dropping a dragged card
 			} else {
-				Card *target = get_hovered_card();
-
-				if (target) {
-					if (can_drop(game.card_dragging, target)) {
-						pile_transfer(target->pile, game.card_dragging);
-						move_success = true;
-					}
-				} else {
-					Pile *pile = get_hovered_pile();
-					if (pile && can_drop_empty_pile(game.card_dragging, pile)) {
-						pile_transfer(pile, game.card_dragging);
-						move_success = true;
-					}
-				}
+				move_success = maybe_drop_dragged_card();
 			}
 
 			if (move_success) {
