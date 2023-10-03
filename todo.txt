@@ -2,12 +2,17 @@ TODO:
 [ ] animate cards when moving to new target
 [ ] animation on game end (oldschool windows solitaire style)
 [ ] add some sound
-[ ] make right click also auto transfer cards to foundation (nova said old solitaire
-    on windows used right click) 
 [ ] restart button (maybe, we already have r key to restart)
+[ ] make a menu
+	[ ] describe controls
+	[ ] maybe describe rules
+	[ ] new game
+	[ ] choose card back
 
 
 DONE:
+[X] make right click also auto transfer cards to foundation (nova said old solitaire
+    on windows used right click) 
 [X] allow the dragging card to act as hitbox when dropping on a new pile instead
 		of the mouse. sometimes it feels bad when the card is being dropped on the
     new pile, but the mouse position is not intersecting the new pile
