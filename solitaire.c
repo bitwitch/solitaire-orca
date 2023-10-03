@@ -3,119 +3,108 @@
 #include <math.h>
 
 #include "random.c"
+#include "common.c"
+#include "draw.c"
 
-#define ARRAY_COUNT(array) sizeof(array) / sizeof(*(array))
-#define CARD_ASPECT (560.0f/780.0f)
-#define STOCK_OFFSET_BETWEEN_CARDS 0.5
-#define MAX_DIST_CONSIDERED_CLICK 2.0f 
+static char *describe_suit(Suit suit) {
+	switch (suit) {
+		case SUIT_CLUB:    return "club";
+		case SUIT_DIAMOND: return "diamond";
+		case SUIT_SPADE:   return "spade";
+		case SUIT_HEART:   return "heart";
+		default:           return "unknown";
+	}
+}
 
-typedef enum {
-	PILE_NONE,
-	PILE_STOCK,
-	PILE_WASTE,
-	PILE_FOUNDATION,
-	PILE_TABLEAU,
-} PileKind;
+static char *describe_card_kind(CardKind kind) {
+	switch (kind) {
+		case CARD_ACE:   return "ace";
+		case CARD_TWO:   return "two";
+		case CARD_THREE: return "three";
+		case CARD_FOUR:  return "four";
+		case CARD_FIVE:  return "five";
+		case CARD_SIX:   return "six";
+		case CARD_SEVEN: return "seven";
+		case CARD_EIGHT: return "eight";
+		case CARD_NINE:  return "nine";
+		case CARD_TEN:   return "ten";
+		case CARD_JACK:  return "jack";
+		case CARD_QUEEN: return "queen";
+		case CARD_KING:  return "king";
+		default:         return "unknown";
+	}
+}
 
-typedef struct {
-	PileKind kind;
-	oc_vec2 pos;
-	oc_list cards;
-} Pile;
+static char *pile_names[] = {
+	"stock", "waste", 
+	"foundations[0]", "foundations[1]", "foundations[2]", "foundations[3]", 
+	"tableau[0]", "tableau[1]", "tableau[2]", "tableau[3]", "tableau[4]", "tableau[5]", "tableau[6]"
+};
+static char *describe_pile(Pile *pile) {
+	if (pile == &game.stock) return pile_names[0];
+	if (pile == &game.waste) return pile_names[1];
+	for (i32 i=0; i<ARRAY_COUNT(game.foundations); ++i) {
+		if (pile == &game.foundations[i]) {
+			return pile_names[i + 2];
+		}
+	}
+	for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
+		if (pile == &game.tableau[i]) {
+			return pile_names[i + 6];
+		}
+	}
+	return "unknown";
+}
 
-typedef enum {
-	CARD_ACE,
-	CARD_TWO,
-	CARD_THREE,
-	CARD_FOUR,
-	CARD_FIVE,
-	CARD_SIX,
-	CARD_SEVEN,
-	CARD_EIGHT,
-	CARD_NINE,
-	CARD_TEN,
-	CARD_JACK,
-	CARD_QUEEN,
-	CARD_KING,
-	CARD_KIND_COUNT,
-} CardKind;
+static void print_card_info(Card *card) {
+	Card *prev = oc_list_prev_entry(card->pile->cards, card, Card, node);
+	Card *next = oc_list_next_entry(card->pile->cards, card, Card, node);
+	oc_log_info("\nCard: %s %s\n\tpile = %s\n\tpos = (%f, %f)\n\tface_up = %s\n\tprev = %s %s\n\tnext = %s %s",
+		describe_card_kind(card->kind),
+		describe_suit(card->suit),
+		describe_pile(card->pile),
+		card->pos.x, card->pos.y,
+		card->face_up ? "true" : "false",
+		prev ? describe_card_kind(prev->kind) : "none",
+		prev ? describe_suit(prev->suit) : "none",
+		next ? describe_card_kind(next->kind) : "none",
+		next ? describe_suit(next->suit) : "none");
+}
 
-typedef enum {
-	SUIT_CLUB,
-	SUIT_DIAMOND,
-	SUIT_HEART,
-	SUIT_SPADE,
-	SUIT_COUNT
-} Suit;
-
-typedef struct {
-	Suit suit;
-	CardKind kind;
-	Pile *pile;
-	oc_vec2 pos;
-	oc_vec2 drag_offset; // offset from mouse to top left corner of card
-	oc_vec2 pos_before_drag;
-	bool face_up;
-	oc_list_elt node;
-} Card;
-
-typedef struct {
-	bool down, was_down;
-} DigitalInput;
-
-typedef struct {
-    float x;
-    float y;
-    float deltaX;
-    float deltaY;
-	DigitalInput left;
-} MouseInput;
-
-typedef struct {
-	DigitalInput r;
-	DigitalInput num1, num2, num3, num4, num5;
-} Input;
-
-typedef struct {
-	bool win;
-	oc_surface surface;
-	oc_canvas canvas;
-	oc_font font;
-	MouseInput mouse_input;
-	Input input;
-
-	oc_vec2 frame_size;
-	oc_vec2 board_margin;
-	u32 card_width, card_height;
-	u32 card_margin_x;
-	u32 tableau_margin_top;
-
-	Pile stock, waste;
-	Pile foundations[4];
-	Pile tableau[7];
-
-	Card *card_dragging;
-	
-	oc_image spritesheet, card_backs[5];
-	u32 selected_card_back;
-	oc_rect card_sprite_rects[SUIT_COUNT][CARD_KIND_COUNT]; 
-	Card cards[SUIT_COUNT*CARD_KIND_COUNT];
-
-} GameState;
-
-GameState game;
-
-static void print_card_info(Card *card);
-static char *describe_suit(Suit suit);
-static char *describe_card_kind(CardKind kind);
-
-f32 vec2_dist(oc_vec2 v1, oc_vec2 v2) {
+static f32 vec2_dist(oc_vec2 v1, oc_vec2 v2) {
 	f32 a = v2.x - v1.x;
 	f32 b = v2.y - v1.y;
 	return sqrtf(a*a + b*b);
 }
 
-void set_sizes_based_on_viewport(u32 width, u32 height) {
+static inline bool pressed(DigitalInput button) {
+	return button.down && !button.was_down;
+}
+
+static inline bool released(DigitalInput button) {
+	return !button.down && button.was_down;
+}
+
+static inline bool point_in_rect(f32 x, f32 y, oc_rect rect) {
+	return x >= rect.x && x < rect.x + rect.w &&
+	       y >= rect.y && y < rect.y + rect.h;
+}
+
+static inline bool rect_in_rect(oc_rect a, oc_rect b) {
+	return point_in_rect(a.x, a.y, b)       ||
+	       point_in_rect(a.x + a.w, a.y, b) ||
+	       point_in_rect(a.x, a.y + a.h, b) ||
+	       point_in_rect(a.x + a.w, a.y + a.h, b);
+}
+
+static bool point_in_card_bounds(f32 x, f32 y, Card *card) {
+	if (!card)
+		return false;
+	return x >= card->pos.x && x < card->pos.x + game.card_width &&
+		   y >= card->pos.y && y < card->pos.y + game.card_height;
+}
+
+static void set_sizes_based_on_viewport(u32 width, u32 height) {
     game.frame_size.x = width;
     game.frame_size.y = height;
 	game.board_margin.x = 50;
@@ -163,7 +152,6 @@ static void load_card_images(void) {
 		};
 	}
 }
-
 
 static void position_card_on_top_of_pile(Card *card, Pile *pile) {
 	switch(pile->kind) {
@@ -398,249 +386,6 @@ static void game_reset(void) {
 	deal_klondike(game.cards, ARRAY_COUNT(game.cards));
 }
 
-ORCA_EXPORT void oc_on_init(void) {
-	// initialize random number generator
-	f64 ftime = oc_clock_time(OC_CLOCK_MONOTONIC);
-	u64 time = *((u64*)&ftime);
-	pcg32_init(time);
-
-    oc_window_set_title(OC_STR8("Solitaire"));
-    game.surface = oc_surface_canvas();
-    game.canvas = oc_canvas_create();
-
-    oc_unicode_range ranges[5] = {
-        OC_UNICODE_BASIC_LATIN,
-        OC_UNICODE_C1_CONTROLS_AND_LATIN_1_SUPPLEMENT,
-        OC_UNICODE_LATIN_EXTENDED_A,
-        OC_UNICODE_LATIN_EXTENDED_B,
-        OC_UNICODE_SPECIALS,
-    };
-	game.font = oc_font_create_from_path(OC_STR8("segoeui.ttf"), 5, ranges);
-
-	oc_vec2 viewport_size = { 1000, 750 };
-	set_sizes_based_on_viewport(viewport_size.x, viewport_size.y);
-	oc_window_set_size(viewport_size);
-
-	load_card_images();
-	game.selected_card_back = 0;
-
-	game.stock.kind = PILE_STOCK;
-	game.waste.kind = PILE_WASTE;
-	for (i32 i=0; i<ARRAY_COUNT(game.foundations); ++i) {
-		game.foundations[i].kind = PILE_FOUNDATION;
-	}
-	for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
-		game.tableau[i].kind = PILE_TABLEAU;
-	}
-
-	deal_klondike(game.cards, ARRAY_COUNT(game.cards));
-}
-
-ORCA_EXPORT void oc_on_resize(u32 width, u32 height) {
-	oc_log_info("width=%lu height=%lu", width, height);
-
-	set_sizes_based_on_viewport(width, height);
-
-	position_all_cards_on_pile(&game.stock);
-	position_all_cards_on_pile(&game.waste);
-	for (i32 i=0; i<ARRAY_COUNT(game.foundations); ++i) {
-		position_all_cards_on_pile(&game.foundations[i]);
-	}
-	for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
-		position_all_cards_on_pile(&game.tableau[i]);
-	}
-}
-
-//------------------------------------------------------------------------------
-// Drawing
-//------------------------------------------------------------------------------
-
-static void draw_stock(void) {
-	u32 border_width = 2;
-	oc_set_width(border_width);
-	oc_set_color_rgba(0.42, 0.42, 0.42, 0.69); // empty pile outline color
-	oc_rounded_rectangle_stroke(
-		game.stock.pos.x + (0.5f * border_width), 
-		game.stock.pos.y + (0.5f * border_width), 
-		game.card_width - border_width, 
-		game.card_height - border_width,
-		5);
-
-	// TODO(shaw): draw an icon to indicate clicking to reset stock pile
-
-	oc_list_for_reverse(game.stock.cards, card, Card, node) {
-		oc_rect dest = { card->pos.x, card->pos.y, game.card_width, game.card_height };
-		oc_image_draw(game.card_backs[game.selected_card_back], dest);
-	}
-}
-
-static void draw_waste(void) {
-	oc_list_for_reverse(game.waste.cards, card, Card, node) {
-		if (game.card_dragging == card) break;
-		oc_rect dest = { card->pos.x, card->pos.y, game.card_width, game.card_height };
-		oc_image_draw_region(game.spritesheet, game.card_sprite_rects[card->suit][card->kind], dest);
-	}
-}
-
-static void draw_foundations(void) {
-	u32 border_width = 2;
-	oc_set_width(border_width);
-	oc_set_color_rgba(0.69, 0.69, 0.69, 0.69); // empty pile outline color
-	for (i32 i=0; i<ARRAY_COUNT(game.foundations); ++i) {
-		oc_rect dest = {
-			.x = game.foundations[i].pos.x, 
-			.y = game.foundations[i].pos.y,
-			.w = game.card_width, 
-			.h = game.card_height };
-
-		oc_rounded_rectangle_stroke(
-			dest.x + (0.5f * border_width), 
-			dest.y + (0.5f * border_width), 
-			game.card_width - border_width, 
-			game.card_height - border_width,  
-			5);
-
-		oc_list_for_reverse(game.foundations[i].cards, card, Card, node) {
-			if (game.card_dragging == card) break;
-			oc_rect dest = { card->pos.x, card->pos.y, game.card_width, game.card_height };
-			oc_image_draw_region(game.spritesheet, game.card_sprite_rects[card->suit][card->kind], dest);
-		}
-	}
-}
-
-static void draw_tableau(void) {
-	u32 border_width = 2;
-	oc_set_width(border_width);
-	oc_set_color_rgba(0.42, 0.42, 0.42, 0.69); // empty pile outline color
-	for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
-
-		oc_rounded_rectangle_stroke(
-			game.tableau[i].pos.x + (0.5f * border_width), 
-			game.tableau[i].pos.y + (0.5f * border_width), 
-			game.card_width - border_width, 
-			game.card_height - border_width, 
-			5);
-
-		oc_list_for_reverse(game.tableau[i].cards, card, Card, node) {
-			if (game.card_dragging == card) break;
-			oc_rect dest = { card->pos.x, card->pos.y, game.card_width, game.card_height };
-			if (card->face_up) {
-				oc_image_draw_region(game.spritesheet, game.card_sprite_rects[card->suit][card->kind], dest);
-			} else {
-				oc_image_draw(game.card_backs[game.selected_card_back], dest);
-			}
-		}
-	}
-}
-
-static void draw_dragging(void) {
-	if (!game.card_dragging) return;
-
-	for (oc_list_elt *node = &game.card_dragging->node; node; node = oc_list_prev(node)) {
-		Card *card = oc_list_entry(node, Card, node);
-		oc_rect dest = { card->pos.x, card->pos.y, game.card_width, game.card_height };
-		oc_image_draw_region(game.spritesheet, game.card_sprite_rects[card->suit][card->kind], dest);
-	}
-}
-
-static void draw_test_deck(Card *cards, i32 num_cards) {
-	assert(SUIT_COUNT * CARD_KIND_COUNT == num_cards);
-	u32 card_width = 56;
-	u32 card_height = 78;
-	for (i32 suit=0; suit < SUIT_COUNT; ++suit)
-	for (i32 kind=0; kind < CARD_KIND_COUNT; ++kind) {
-		oc_rect dest = {
-			.x = kind * card_width,
-			.y = suit * card_height,
-			.w = card_width, 
-			.h = card_height };
-		oc_image_draw_region(game.spritesheet, game.card_sprite_rects[suit][kind], dest);
-	}
-
-	for (i32 i=0; i<ARRAY_COUNT(game.card_backs); ++i) {
-		oc_rect dest = {
-			.x = i * card_width,
-			.y = SUIT_COUNT * card_height,
-			.w = card_width, 
-			.h = card_height };
-		oc_image_draw(game.card_backs[i], dest);
-	}
-}
-
-oc_str8 WIN_TEXT = OC_STR8_LIT("YOU WIN!");
-
-static void draw_win_text(void) {
-	f32 font_size = 64;
-	f32 padding = 50;
-	oc_set_font(game.font);
-	oc_set_font_size(font_size);
-	oc_text_metrics metrics = oc_font_text_metrics(game.font, font_size, WIN_TEXT);
-	f32 x = 0.5f * (game.frame_size.x - metrics.ink.w);
-	f32 y = 0.5f * (game.frame_size.y + metrics.ink.h);
-
-	oc_set_color_rgba(0, 0, 0, 0.75); 
-	oc_rectangle_fill(
-		x - padding, 
-		y - metrics.ink.h - padding, 
-		metrics.ink.w + 2.0f * padding, 
-		metrics.ink.h + 2.0f * padding);
-
-	oc_set_color_rgba(1, 1, 1, 1);
-	oc_text_fill(x, y, WIN_TEXT);
-}
-
-static void solitaire_draw(void) {
-    oc_canvas_select(game.canvas);
-    oc_set_color_rgba(10.0f / 255.0f, 31.0f / 255.0f, 72.0f / 255.0f, 1);
-    oc_clear();
-
-	draw_stock();
-	draw_waste();
-	draw_foundations();
-	draw_tableau();
-
-	draw_dragging();
-
-	if (game.win) {
-		draw_win_text();
-	}
-
-    oc_surface_select(game.surface);
-    oc_render(game.canvas);
-    oc_surface_present(game.surface);
-}
-
-//------------------------------------------------------------------------------
-// Game Logic
-//------------------------------------------------------------------------------
-
-static inline bool pressed(DigitalInput button) {
-	return button.down && !button.was_down;
-}
-
-static inline bool released(DigitalInput button) {
-	return !button.down && button.was_down;
-}
-
-static inline bool point_in_rect(f32 x, f32 y, oc_rect rect) {
-	return x >= rect.x && x < rect.x + rect.w &&
-	       y >= rect.y && y < rect.y + rect.h;
-}
-
-static inline bool rect_in_rect(oc_rect a, oc_rect b) {
-	return point_in_rect(a.x, a.y, b)       ||
-	       point_in_rect(a.x + a.w, a.y, b) ||
-	       point_in_rect(a.x, a.y + a.h, b) ||
-	       point_in_rect(a.x + a.w, a.y + a.h, b);
-}
-
-static bool point_in_card_bounds(f32 x, f32 y, Card *card) {
-	if (!card)
-		return false;
-	return x >= card->pos.x && x < card->pos.x + game.card_width &&
-		   y >= card->pos.y && y < card->pos.y + game.card_height;
-}
-
 static Pile *get_hovered_pile(void) {
 	f32 mx = game.mouse_input.x;
 	f32 my = game.mouse_input.y;
@@ -674,14 +419,6 @@ static Pile *get_hovered_pile(void) {
 	}
 
 	return NULL;
-}
-
-// TODO(shaw): figure out how to handle multiple collisions
-static Card *get_collision_card(Card *card) {
-	Card *result = NULL;
-
-
-	return result;
 }
 
 // returns the card the mouse is currently over
@@ -765,6 +502,7 @@ static bool can_drop_empty_pile(Card *card, Pile *pile) {
 	return result;
 }
 
+// is it legal to drop card on target
 static bool can_drop(Card *card, Card *target) {
 	assert(target);
 	assert(target->pile);
@@ -781,6 +519,8 @@ static bool can_drop(Card *card, Card *target) {
 	return result;
 }
 
+// checks if card is currently colliding with an empty pile or the top card on
+// the pile and returns true if it is legal to drop card there, otherwise false
 static bool can_drop_card_on_pile(Pile *pile, Card *card) {
 	oc_rect card_rect = {
 		.x = card->pos.x, 
@@ -847,71 +587,6 @@ static bool maybe_drop_dragged_card(void) {
 }
 
 
-static char *describe_suit(Suit suit) {
-	switch (suit) {
-		case SUIT_CLUB:    return "club";
-		case SUIT_DIAMOND: return "diamond";
-		case SUIT_SPADE:   return "spade";
-		case SUIT_HEART:   return "heart";
-		default:           return "unknown";
-	}
-}
-
-static char *describe_card_kind(CardKind kind) {
-	switch (kind) {
-		case CARD_ACE:   return "ace";
-		case CARD_TWO:   return "two";
-		case CARD_THREE: return "three";
-		case CARD_FOUR:  return "four";
-		case CARD_FIVE:  return "five";
-		case CARD_SIX:   return "six";
-		case CARD_SEVEN: return "seven";
-		case CARD_EIGHT: return "eight";
-		case CARD_NINE:  return "nine";
-		case CARD_TEN:   return "ten";
-		case CARD_JACK:  return "jack";
-		case CARD_QUEEN: return "queen";
-		case CARD_KING:  return "king";
-		default:         return "unknown";
-	}
-}
-
-static char *pile_names[] = {
-	"stock", "waste", 
-	"foundations[0]", "foundations[1]", "foundations[2]", "foundations[3]", 
-	"tableau[0]", "tableau[1]", "tableau[2]", "tableau[3]", "tableau[4]", "tableau[5]", "tableau[6]"
-};
-static char *describe_pile(Pile *pile) {
-	if (pile == &game.stock) return pile_names[0];
-	if (pile == &game.waste) return pile_names[1];
-	for (i32 i=0; i<ARRAY_COUNT(game.foundations); ++i) {
-		if (pile == &game.foundations[i]) {
-			return pile_names[i + 2];
-		}
-	}
-	for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
-		if (pile == &game.tableau[i]) {
-			return pile_names[i + 6];
-		}
-	}
-	return "unknown";
-}
-
-static void print_card_info(Card *card) {
-	Card *prev = oc_list_prev_entry(card->pile->cards, card, Card, node);
-	Card *next = oc_list_next_entry(card->pile->cards, card, Card, node);
-	oc_log_info("\nCard: %s %s\n\tpile = %s\n\tpos = (%f, %f)\n\tface_up = %s\n\tprev = %s %s\n\tnext = %s %s",
-		describe_card_kind(card->kind),
-		describe_suit(card->suit),
-		describe_pile(card->pile),
-		card->pos.x, card->pos.y,
-		card->face_up ? "true" : "false",
-		prev ? describe_card_kind(prev->kind) : "none",
-		prev ? describe_suit(prev->suit) : "none",
-		next ? describe_card_kind(next->kind) : "none",
-		next ? describe_suit(next->suit) : "none");
-}
-
 static bool is_game_won(void) {
 	bool win = true;
 	for (i32 i=0; i<ARRAY_COUNT(game.foundations); ++i) {
@@ -922,11 +597,6 @@ static bool is_game_won(void) {
 		}
 	}
 	return win;
-}
-
-static void end_frame_input(void) {
-	game.mouse_input.left.was_down = game.mouse_input.left.down;
-	game.input.r.was_down = game.input.r.down;
 }
 
 static bool is_tableau_empty(void) {
@@ -978,25 +648,66 @@ static void autocomplete_if_possible(void) {
 	}
 }
 
-static void solitaire_update(void) {
-	if (pressed(game.mouse_input.left)) {
-		Card *clicked_card = get_hovered_card();
+static bool auto_transfer_card_to_foundation(Card *card) {
+	if (card->pile->kind == PILE_FOUNDATION || card->node.prev != NULL) {
+		return false;
+	}
 
-		if (clicked_card) {
+	for (i32 i=0; i<ARRAY_COUNT(game.foundations); ++i) {
+		bool auto_transfer = false;
+		Card *top = pile_peek_top(&game.foundations[i]);
+		if (top) {
+			if ((top->suit == card->suit) && (top->kind == card->kind - 1)) {
+				auto_transfer = true;
+			}
+		} else if (card->kind == CARD_ACE) {
+			auto_transfer = true;
+		}
+
+		if (auto_transfer) {
+			pile_transfer(&game.foundations[i], card);
+			return true;
+		}
+	}
+
+	return false;
+}
+
+// if a card at the top of tableau has been revealed turn it over
+static void reveal_tableau_card(void) {
+	for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
+		Card *top = pile_peek_top(&game.tableau[i]);
+		if (top && !top->face_up) {
+			top->face_up = true;
+		}
+	}
+}
+
+static void end_frame_input(void) {
+	game.mouse_input.left.was_down = game.mouse_input.left.down;
+	game.mouse_input.right.was_down = game.mouse_input.right.down;
+	game.input.r.was_down = game.input.r.down;
+}
+
+static void solitaire_update(void) {
+	Card *hovered_card = get_hovered_card();
+
+	if (pressed(game.mouse_input.left)) {
+		if (hovered_card) {
 			// start dragging card
-			if (can_drag(clicked_card)) {
+			if (can_drag(hovered_card)) {
 				// store pos and drag offset for all cards being dragged together
-				for (oc_list_elt *node = &clicked_card->node; node; node = node->prev) {
+				for (oc_list_elt *node = &hovered_card->node; node; node = node->prev) {
 					Card *card = oc_list_entry(node, Card, node);
 					card->pos_before_drag = card->pos;
 					card->drag_offset.x = game.mouse_input.x - card->pos.x;
 					card->drag_offset.y = game.mouse_input.y - card->pos.y;
 				}
-				game.card_dragging = clicked_card;
+				game.card_dragging = hovered_card;
 			}
 
 			// if stock clicked, move a card to waste
-			if (clicked_card == oc_list_first_entry(game.stock.cards, Card, node)) {
+			if (hovered_card == oc_list_first_entry(game.stock.cards, Card, node)) {
 				Card *card = pile_peek_top(&game.stock);
 				card->face_up = true;
 				pile_transfer(&game.waste, card);
@@ -1020,49 +731,16 @@ static void solitaire_update(void) {
 		if (game.card_dragging) {
 			bool move_success = false; // default to false
 			f32 drag_dist = vec2_dist(game.card_dragging->pos, game.card_dragging->pos_before_drag);
-			bool card_clicked = drag_dist <= MAX_DIST_CONSIDERED_CLICK;
+			bool is_card_clicked = drag_dist <= MAX_DIST_CONSIDERED_CLICK;
 
-			// clicking on a card transfers it to foundation if possible
-			if (card_clicked) {
-				bool valid_auto_transfer_candidate = 
-					game.card_dragging->pile->kind != PILE_FOUNDATION && 
-					game.card_dragging->node.prev == NULL;
-
-				if (valid_auto_transfer_candidate) {
-					CardKind drag_kind = game.card_dragging->kind;
-					Suit drag_suit = game.card_dragging->suit;
-					for (i32 i=0; i<ARRAY_COUNT(game.foundations); ++i) {
-						bool auto_transfer = false;
-						Card *top = pile_peek_top(&game.foundations[i]);
-						if (top) {
-							if ((top->suit == drag_suit) && (top->kind == drag_kind - 1)) {
-								auto_transfer = true;
-							}
-						} else if (drag_kind == CARD_ACE) {
-							auto_transfer = true;
-						}
-
-						if (auto_transfer) {
-							pile_transfer(&game.foundations[i], game.card_dragging);
-							move_success = true;
-							break;
-						}
-					}
-				}
-
-			// dropping a dragged card
+			if (is_card_clicked) {
+				move_success = auto_transfer_card_to_foundation(game.card_dragging);
 			} else {
 				move_success = maybe_drop_dragged_card();
 			}
 
 			if (move_success) {
-				// if a card at the top of tableau has been revealed turn it over
-				for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
-					Card *top = pile_peek_top(&game.tableau[i]);
-					if (top && !top->face_up) {
-						top->face_up = true;
-					}
-				}
+				reveal_tableau_card();
 
 				autocomplete_if_possible();
 
@@ -1079,6 +757,21 @@ static void solitaire_update(void) {
 			}
 	
 			game.card_dragging = NULL;
+		}
+
+	} else if (pressed(game.mouse_input.right)) {
+		game.mouse_pos_on_mouse_right_down = (oc_vec2){ game.mouse_input.x, game.mouse_input.y };
+
+	} else if (released(game.mouse_input.right)) {
+		if (hovered_card) {
+			f32 d = vec2_dist(game.mouse_pos_on_mouse_right_down, (oc_vec2){game.mouse_input.x, game.mouse_input.y});
+			bool is_card_right_clicked = d <= MAX_DIST_CONSIDERED_CLICK;
+			if (is_card_right_clicked) {
+				bool did_transfer = auto_transfer_card_to_foundation(hovered_card);
+				if (did_transfer) {
+					reveal_tableau_card();
+				}
+			}
 		}
 	}
 
@@ -1108,6 +801,59 @@ static void solitaire_update(void) {
 	}
 
 	end_frame_input();
+}
+
+ORCA_EXPORT void oc_on_init(void) {
+	// initialize random number generator
+	f64 ftime = oc_clock_time(OC_CLOCK_MONOTONIC);
+	u64 time = *((u64*)&ftime);
+	pcg32_init(time);
+
+    oc_window_set_title(OC_STR8("Solitaire"));
+    game.surface = oc_surface_canvas();
+    game.canvas = oc_canvas_create();
+
+    oc_unicode_range ranges[5] = {
+        OC_UNICODE_BASIC_LATIN,
+        OC_UNICODE_C1_CONTROLS_AND_LATIN_1_SUPPLEMENT,
+        OC_UNICODE_LATIN_EXTENDED_A,
+        OC_UNICODE_LATIN_EXTENDED_B,
+        OC_UNICODE_SPECIALS,
+    };
+	game.font = oc_font_create_from_path(OC_STR8("segoeui.ttf"), 5, ranges);
+
+	oc_vec2 viewport_size = { 1000, 750 };
+	set_sizes_based_on_viewport(viewport_size.x, viewport_size.y);
+	oc_window_set_size(viewport_size);
+
+	load_card_images();
+	game.selected_card_back = 0;
+
+	game.stock.kind = PILE_STOCK;
+	game.waste.kind = PILE_WASTE;
+	for (i32 i=0; i<ARRAY_COUNT(game.foundations); ++i) {
+		game.foundations[i].kind = PILE_FOUNDATION;
+	}
+	for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
+		game.tableau[i].kind = PILE_TABLEAU;
+	}
+
+	deal_klondike(game.cards, ARRAY_COUNT(game.cards));
+}
+
+ORCA_EXPORT void oc_on_resize(u32 width, u32 height) {
+	oc_log_info("width=%lu height=%lu", width, height);
+
+	set_sizes_based_on_viewport(width, height);
+
+	position_all_cards_on_pile(&game.stock);
+	position_all_cards_on_pile(&game.waste);
+	for (i32 i=0; i<ARRAY_COUNT(game.foundations); ++i) {
+		position_all_cards_on_pile(&game.foundations[i]);
+	}
+	for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
+		position_all_cards_on_pile(&game.tableau[i]);
+	}
 }
 
 ORCA_EXPORT void oc_on_key_down(oc_scan_code scan, oc_key_code key) {
@@ -1140,12 +886,16 @@ ORCA_EXPORT void oc_on_key_up(oc_scan_code scan, oc_key_code key) {
 ORCA_EXPORT void oc_on_mouse_down(int button) {
 	if (button == OC_MOUSE_LEFT) {
 		game.mouse_input.left.down = true;
+	} else if (button == OC_MOUSE_RIGHT) {
+		game.mouse_input.right.down = true;
 	}
 }
 
 ORCA_EXPORT void oc_on_mouse_up(int button) {
 	if (button == OC_MOUSE_LEFT) {
 		game.mouse_input.left.down = false;
+	} else if (button == OC_MOUSE_RIGHT) {
+		game.mouse_input.right.down = false;
 	}
 }
 
