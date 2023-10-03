@@ -1,6 +1,7 @@
 TODO:
 [ ] animate cards when moving to new target
 [ ] animation on game end (oldschool windows solitaire style)
+[ ] card dealing animation
 [ ] add some sound
 [ ] restart button (maybe, we already have r key to restart)
 [ ] make a menu

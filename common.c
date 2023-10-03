@@ -47,6 +47,7 @@ typedef struct {
 	CardKind kind;
 	Pile *pile;
 	oc_vec2 pos;
+	oc_vec2 target_pos;
 	oc_vec2 drag_offset; // offset from mouse to top left corner of card
 	oc_vec2 pos_before_drag;
 	bool face_up;
@@ -70,7 +71,14 @@ typedef struct {
 	DigitalInput num1, num2, num3, num4, num5;
 } Input;
 
+typedef enum {
+	STATE_NONE,
+	STATE_DEALING,
+	STATE_PLAY,
+} StateKind;
+
 typedef struct {
+	StateKind state;
 	bool win;
 	oc_surface surface;
 	oc_canvas canvas;
@@ -78,6 +86,16 @@ typedef struct {
 	MouseInput mouse_input;
 	Input input;
 	oc_vec2 mouse_pos_on_mouse_right_down;
+
+	f64 last_timestamp;
+	f64 dt;
+	f32 deal_speed;
+	f32 card_animate_speed;
+
+	f64 deal_countdown, deal_delay;
+	i32 deal_tableau_index;     // used for calculating 
+	i32 deal_tableau_remaining; // where to deal cards
+	i32 deal_cards_remaining;
 
 	oc_vec2 frame_size;
 	oc_vec2 board_margin;

@@ -153,30 +153,33 @@ static void load_card_images(void) {
 	}
 }
 
-static void position_card_on_top_of_pile(Card *card, Pile *pile) {
+static void position_card_on_top_of_pile(Card *card, Pile *pile, bool instant) {
+	assert(card);
+	assert(pile);
+	oc_vec2 new_pos = {0};
 	switch(pile->kind) {
 	case PILE_STOCK: {
 		Card *top = oc_list_first_entry(pile->cards, Card, node);
 		if (top) {
-			card->pos.x = top->pos.x - STOCK_OFFSET_BETWEEN_CARDS;
-			card->pos.y = top->pos.y - STOCK_OFFSET_BETWEEN_CARDS;
+			new_pos.x = top->target_pos.x - STOCK_OFFSET_BETWEEN_CARDS;
+			new_pos.y = top->target_pos.y - STOCK_OFFSET_BETWEEN_CARDS;
 		} else {
-			card->pos = pile->pos;
+			new_pos = pile->pos;
 		}
 		break;
 	}
 	case PILE_WASTE:
 	case PILE_FOUNDATION:
-		card->pos = pile->pos;
+		new_pos = pile->pos;
 		break;
 	case PILE_TABLEAU: {
 		Card *top = oc_list_first_entry(pile->cards, Card, node);
 		if (top) {
 			i32 y_offset = top->face_up ? (0.25f * game.card_height) : (0.125f * game.card_height);
-			card->pos.x = top->pos.x;
-			card->pos.y = top->pos.y + y_offset;
+			new_pos.x = top->target_pos.x;
+			new_pos.y = top->target_pos.y + y_offset;
 		} else {
-			card->pos = pile->pos;
+			new_pos = pile->pos;
 		}
 		break;
 	}
@@ -184,22 +187,33 @@ static void position_card_on_top_of_pile(Card *card, Pile *pile) {
 		assert(0);
 		break;
 	}
+
+	card->target_pos = new_pos;
+	if (instant) {
+		card->pos = new_pos;
+	} 
 }
 
-static void position_all_cards_on_pile(Pile *pile) {
+static void position_all_cards_on_pile(Pile *pile, bool instant) {
 	switch (pile->kind) {
 	case PILE_WASTE:
 	case PILE_FOUNDATION: {
 		oc_list_for_reverse(pile->cards, card, Card, node) {
-			card->pos = pile->pos;
+			card->target_pos = pile->pos;
+			if (instant) {
+				card->pos = card->target_pos;
+			}
 		}
 		break;
 	}
 	case PILE_STOCK: {
 		f32 offset = 0;
 		oc_list_for_reverse(pile->cards, card, Card, node) {
-			card->pos.x = pile->pos.x - offset;
-			card->pos.y = pile->pos.y - offset;
+			card->target_pos.x = pile->pos.x - offset;
+			card->target_pos.y = pile->pos.y - offset;
+			if (instant) {
+				card->pos = card->target_pos;
+			}
 			offset += STOCK_OFFSET_BETWEEN_CARDS;
 		}
 		break;
@@ -209,8 +223,11 @@ static void position_all_cards_on_pile(Pile *pile) {
 		i32 y_offset_face_down = 0.125f * game.card_height;
 		i32 y_offset = 0;
 		oc_list_for_reverse(pile->cards, card, Card, node) {
-			card->pos.x = pile->pos.x;
-			card->pos.y = pile->pos.y + y_offset;
+			card->target_pos.x = pile->pos.x;
+			card->target_pos.y = pile->pos.y + y_offset;
+			if (instant) {
+				card->pos = card->target_pos;
+			}
 			y_offset += card->face_up ? y_offset_face_up : y_offset_face_down;
 		}
 		break;
@@ -231,15 +248,15 @@ static Card *pile_peek_top(Pile *pile) {
 	return oc_list_first_entry(pile->cards, Card, node);
 }
 
-static void pile_push(Pile *pile, Card *card) {
-	position_card_on_top_of_pile(card, pile);
+static void pile_push(Pile *pile, Card *card, bool instant) {
+	position_card_on_top_of_pile(card, pile, instant);
 	card->pile = pile;
 	oc_list_push(&pile->cards, &card->node);
 }
 
 // this is basically moving a sublist from one list to another
 // rather than a single element 
-static void pile_transfer(Pile *target_pile, Card *card) {
+static void pile_transfer(Pile *target_pile, Card *card, bool instant) {
 	assert(card->pile);
 	oc_list_elt *node = &card->node;
 
@@ -261,14 +278,14 @@ static void pile_transfer(Pile *target_pile, Card *card) {
 		target_pile->cards.last = node;
 	}
 
-	position_card_on_top_of_pile(card, target_pile);
+	position_card_on_top_of_pile(card, target_pile, instant);
 	card->pile = target_pile;
 	target_pile->cards.first = node;
 
 	while (node->prev) {
 		node = node->prev;
 		Card *current = oc_list_entry(node, Card, node);
-		position_card_on_top_of_pile(current, target_pile);
+		position_card_on_top_of_pile(current, target_pile, instant);
 		current->pile = target_pile;
 		target_pile->cards.first = node;
 	}
@@ -295,7 +312,7 @@ static void test_deal_for_autocomplete(Card *cards, i32 num_cards) {
 		card->face_up = true;
 		card->suit = (kind % 2) == 0 ? suit_even : suit_odd;
 		card->kind = kind;
-		pile_push(&game.tableau[0], card);
+		pile_push(&game.tableau[0], card, true);
 	}
 
 	suit_even = SUIT_CLUB;
@@ -306,7 +323,7 @@ static void test_deal_for_autocomplete(Card *cards, i32 num_cards) {
 		card->face_up = true;
 		card->suit = (kind % 2) == 0 ? suit_even : suit_odd;
 		card->kind = kind;
-		pile_push(&game.tableau[1], card);
+		pile_push(&game.tableau[1], card, true);
 	}
 
 	suit_even = SUIT_HEART;
@@ -317,7 +334,7 @@ static void test_deal_for_autocomplete(Card *cards, i32 num_cards) {
 		card->face_up = true;
 		card->suit = (kind % 2) == 0 ? suit_even : suit_odd;
 		card->kind = kind;
-		pile_push(&game.tableau[2], card);
+		pile_push(&game.tableau[2], card, true);
 	}
 
 	suit_even = SUIT_SPADE;
@@ -328,7 +345,7 @@ static void test_deal_for_autocomplete(Card *cards, i32 num_cards) {
 		card->face_up = true;
 		card->suit = (kind % 2) == 0 ? suit_even : suit_odd;
 		card->kind = kind;
-		pile_push(&game.tableau[3], card);
+		pile_push(&game.tableau[3], card, true);
 	}
 }
 
@@ -347,26 +364,33 @@ static void deal_klondike(Card *cards, i32 num_cards) {
 
 	// put all cards in stock
 	for (i32 i=0; i<num_cards; ++i) {
-		pile_push(&game.stock, &cards[i]);
+		pile_push(&game.stock, &cards[i], true);
 	}
 
-	// deal to tableau
-	for (i32 i=0; i<7; ++i) {
-		// deal i cards face down
-		i32 face_down_y_offset = 0.125f * game.card_height;
-		i32 face_up_y_offset = 0.25f * game.card_height;
-		i32 y_offset = 0;
-		for (i32 i_face_down=0; i_face_down < i; ++i_face_down) {
-			Card *card = pile_peek_top(&game.stock);
-			card->face_up = false;
-			pile_transfer(&game.tableau[i], card);
-		}
+	// move tableau cards to temporary deal pile (for animation)
+	// for (i32 i=0; i<7; ++i) {
+		// for (i32 j=0; j<i+1; ++j) {
+			// Card *card = pile_peek_top(&game.stock);
+			// pile_transfer(&game.deal_pile, card, true);
+		// }
 
-		// deal 1 card face up
-		Card *card = pile_peek_top(&game.stock);
-		card->face_up = true;
-		pile_transfer(&game.tableau[i], card);
-	}
+		// // deal i cards face down
+		// i32 face_down_y_offset = 0.125f * game.card_height;
+		// i32 face_up_y_offset = 0.25f * game.card_height;
+		// i32 y_offset = 0;
+		// for (i32 i_face_down=0; i_face_down < i; ++i_face_down) {
+			// Card *card = pile_peek_top(&game.stock);
+			// card->face_up = false;
+			// pile_transfer(&game.tableau[i], card, false);
+		// }
+
+		// // deal 1 card face up
+		// Card *card = pile_peek_top(&game.stock);
+		// card->face_up = true;
+		// pile_transfer(&game.tableau[i], card, false);
+	// }
+
+	game.state = STATE_DEALING;
 }
 
 static void game_reset(void) {
@@ -382,6 +406,11 @@ static void game_reset(void) {
 	for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
 		oc_list_init(&game.tableau[i].cards);
 	}
+
+	game.deal_countdown = 0;
+	game.deal_tableau_index = 0;
+	game.deal_tableau_remaining = ARRAY_COUNT(game.tableau);
+	game.deal_cards_remaining = 28; // 7+6+5+4+3+2+1
 
 	deal_klondike(game.cards, ARRAY_COUNT(game.cards));
 }
@@ -569,7 +598,7 @@ static bool maybe_drop_dragged_card(void) {
 	for (i32 i=0; i<ARRAY_COUNT(game.foundations); ++i) {
 		Pile *pile = &game.foundations[i]; 
 		if (can_drop_card_on_pile(pile, drag_card)) {
-			pile_transfer(pile, drag_card);
+			pile_transfer(pile, drag_card, true);
 			return true;
 		}
 	}
@@ -578,7 +607,7 @@ static bool maybe_drop_dragged_card(void) {
 	for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
 		Pile *pile = &game.tableau[i];
 		if (can_drop_card_on_pile(pile, drag_card)) {
-			pile_transfer(pile, drag_card);
+			pile_transfer(pile, drag_card, true);
 			return true;
 		}
 	}
@@ -638,10 +667,10 @@ static void autocomplete_if_possible(void) {
 					if (tableau_top->suit == foundation_top->suit &&
 						tableau_top->kind == foundation_top->kind + 1)
 					{
-						pile_transfer(&game.foundations[j], tableau_top);
+						pile_transfer(&game.foundations[j], tableau_top, true);
 					}
 				} else if (tableau_top->kind == CARD_ACE){
-					pile_transfer(&game.foundations[j], tableau_top);
+					pile_transfer(&game.foundations[j], tableau_top, true);
 				}
 			}
 		}
@@ -665,7 +694,7 @@ static bool auto_transfer_card_to_foundation(Card *card) {
 		}
 
 		if (auto_transfer) {
-			pile_transfer(&game.foundations[i], card);
+			pile_transfer(&game.foundations[i], card, true);
 			return true;
 		}
 	}
@@ -683,13 +712,56 @@ static void reveal_tableau_card(void) {
 	}
 }
 
-static void end_frame_input(void) {
-	game.mouse_input.left.was_down = game.mouse_input.left.down;
-	game.mouse_input.right.was_down = game.mouse_input.right.down;
-	game.input.r.was_down = game.input.r.down;
+static bool step_cards_towards_target(f32 rate) {
+	bool any_card_moved = false;
+	for (i32 i=0; i<ARRAY_COUNT(game.cards); ++i) {
+		Card *card = &game.cards[i];
+		// oc_log_info("Card[%d] pos(%f,%f) target(%f,%f)", i, card->pos.x, card->pos.y, card->target_pos.x, card->target_pos.y);
+		if (card->pos.x != card->target_pos.x || card->pos.y != card->target_pos.y) {
+			if (vec2_dist(card->pos, card->target_pos) < 0.1) {
+				card->pos = card->target_pos;
+			} else {
+				card->pos.x += (card->target_pos.x - card->pos.x) * rate * game.dt;
+				card->pos.y += (card->target_pos.y - card->pos.y) * rate * game.dt;
+				any_card_moved = true;
+			}
+		}
+	}
+	return any_card_moved;
 }
 
-static void solitaire_update(void) {
+static void solitaire_update_dealing(void) {
+	if (game.deal_cards_remaining > 0 && game.deal_countdown <= 0) {
+		Card *card = pile_pop(&game.stock);
+		--game.deal_cards_remaining;
+		i32 i = game.deal_tableau_index;
+		i32 remaining = game.deal_tableau_remaining;
+		i32 count = ARRAY_COUNT(game.tableau);
+
+		pile_push(&game.tableau[i], card, false);
+		if (i == count - remaining) {
+			card->face_up = true;
+		}
+
+		if (i == count - 1) {
+			--game.deal_tableau_remaining;
+			game.deal_tableau_index = count - game.deal_tableau_remaining;
+		} else {
+			++game.deal_tableau_index;
+		}
+		game.deal_countdown += game.deal_delay;
+	} else {
+		game.deal_countdown -= game.dt;
+	}
+
+	bool any_card_moved = step_cards_towards_target(game.deal_speed);
+	
+	if (game.deal_cards_remaining == 0 && !any_card_moved) {
+		game.state = STATE_PLAY;
+	}
+}
+
+static void solitaire_update_play(void) {
 	Card *hovered_card = get_hovered_card();
 
 	if (pressed(game.mouse_input.left)) {
@@ -710,7 +782,7 @@ static void solitaire_update(void) {
 			if (hovered_card == oc_list_first_entry(game.stock.cards, Card, node)) {
 				Card *card = pile_peek_top(&game.stock);
 				card->face_up = true;
-				pile_transfer(&game.waste, card);
+				pile_transfer(&game.waste, card, true);
 			}
 		} else {
 			// if empty stock clicked, move all waste to stock
@@ -720,7 +792,7 @@ static void solitaire_update(void) {
 					Card *card = pile_peek_top(&game.waste);
 					while (card) {
 						card->face_up = false;
-						pile_transfer(&game.stock, card);
+						pile_transfer(&game.stock, card, true);
 						card = pile_peek_top(&game.waste);
 					}	
 				}
@@ -752,7 +824,7 @@ static void solitaire_update(void) {
 				// return cards to previous position
 				for (oc_list_elt *node = &game.card_dragging->node; node; node = node->prev) {
 					Card *card = oc_list_entry(node, Card, node);
-					card->pos = card->pos_before_drag;
+					card->target_pos = card->pos_before_drag;
 				}
 			}
 	
@@ -779,9 +851,29 @@ static void solitaire_update(void) {
 	if (game.card_dragging) {
 		for (oc_list_elt *node = &game.card_dragging->node; node; node = node->prev) {
 			Card *card = oc_list_entry(node, Card, node);
-			card->pos.x = game.mouse_input.x - card->drag_offset.x;
-			card->pos.y = game.mouse_input.y - card->drag_offset.y;
+			card->target_pos.x = game.mouse_input.x - card->drag_offset.x;
+			card->target_pos.y = game.mouse_input.y - card->drag_offset.y;
+			// NOTE(shaw): it is important to set both pos and target_pos here
+			// so that card drops are accurate. 
+			card->pos = card->target_pos; 
 		}
+	}
+}
+
+static void end_frame_input(void) {
+	game.mouse_input.left.was_down = game.mouse_input.left.down;
+	game.mouse_input.right.was_down = game.mouse_input.right.down;
+	game.input.r.was_down = game.input.r.down;
+}
+
+static void solitaire_update(void) {
+
+	if (game.state == STATE_DEALING) {
+		solitaire_update_dealing();
+	} else {
+		assert(game.state == STATE_PLAY);
+		step_cards_towards_target(game.card_animate_speed);
+		solitaire_update_play();
 	}
 
 	if (pressed(game.input.num1)) {
@@ -838,6 +930,16 @@ ORCA_EXPORT void oc_on_init(void) {
 		game.tableau[i].kind = PILE_TABLEAU;
 	}
 
+    game.last_timestamp = oc_clock_time(OC_CLOCK_DATE);
+
+	game.deal_countdown = 0;
+	game.deal_delay = 0.1;
+	game.deal_tableau_index = 0;
+	game.deal_tableau_remaining = ARRAY_COUNT(game.tableau);
+	game.deal_cards_remaining = 28; // 7+6+5+4+3+2+1
+
+	game.deal_speed = 10;
+	game.card_animate_speed = 25;
 	deal_klondike(game.cards, ARRAY_COUNT(game.cards));
 }
 
@@ -846,13 +948,13 @@ ORCA_EXPORT void oc_on_resize(u32 width, u32 height) {
 
 	set_sizes_based_on_viewport(width, height);
 
-	position_all_cards_on_pile(&game.stock);
-	position_all_cards_on_pile(&game.waste);
+	position_all_cards_on_pile(&game.stock, false);
+	position_all_cards_on_pile(&game.waste, false);
 	for (i32 i=0; i<ARRAY_COUNT(game.foundations); ++i) {
-		position_all_cards_on_pile(&game.foundations[i]);
+		position_all_cards_on_pile(&game.foundations[i], false);
 	}
 	for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
-		position_all_cards_on_pile(&game.tableau[i]);
+		position_all_cards_on_pile(&game.tableau[i], false);
 	}
 }
 
@@ -907,6 +1009,10 @@ ORCA_EXPORT void oc_on_mouse_move(float x, float y, float dx, float dy) {
 }
 
 ORCA_EXPORT void oc_on_frame_refresh(void) {
+    f64 timestamp = oc_clock_time(OC_CLOCK_DATE);
+	game.dt = timestamp - game.last_timestamp;
+	game.last_timestamp = timestamp;
+
 	solitaire_update();
 	solitaire_draw();
 }
