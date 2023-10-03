@@ -394,7 +394,6 @@ static void deal_klondike(Card *cards, i32 num_cards) {
 }
 
 static void game_reset(void) {
-	game.win = false;
 	game.card_dragging = false;
 	memset(&game.mouse_input, 0, sizeof(game.mouse_input));
 	memset(&game.input, 0, sizeof(game.input));
@@ -637,44 +636,25 @@ static bool is_tableau_empty(void) {
 	return true;
 }
 
-static void autocomplete_if_possible(void) {
+static bool is_autocomplete_possible(void) {
 	if (!oc_list_empty(game.stock.cards) || !oc_list_empty(game.waste.cards)) {
-		return;
+		return false;
 	}
 
 	for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
 		Pile *pile = &game.tableau[i];
 		oc_list_for_reverse(pile->cards, card, Card, node) {
 			if (!card->face_up) {
-				return;
+				return false;
 			}	
 			Card *prev = oc_list_prev_entry(pile->cards, card, Card, node);
 			if (prev && prev->kind != card->kind - 1) {
-				return;
+				return false;
 			}
 		}
 	}
 
-	// if we made it here, go ahead and perform autocomplete
-	oc_log_info("autocompleting");
-	while (!is_tableau_empty()) {
-		for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
-			Card *tableau_top = pile_peek_top(&game.tableau[i]);
-			if (!tableau_top) continue;
-			for (i32 j=0; j<ARRAY_COUNT(game.foundations); ++j) {
-				Card *foundation_top = pile_peek_top(&game.foundations[j]);
-				if (foundation_top) {
-					if (tableau_top->suit == foundation_top->suit &&
-						tableau_top->kind == foundation_top->kind + 1)
-					{
-						pile_transfer(&game.foundations[j], tableau_top, true);
-					}
-				} else if (tableau_top->kind == CARD_ACE){
-					pile_transfer(&game.foundations[j], tableau_top, true);
-				}
-			}
-		}
-	}
+	return true;
 }
 
 static bool auto_transfer_card_to_foundation(Card *card) {
@@ -716,7 +696,6 @@ static bool step_cards_towards_target(f32 rate) {
 	bool any_card_moved = false;
 	for (i32 i=0; i<ARRAY_COUNT(game.cards); ++i) {
 		Card *card = &game.cards[i];
-		// oc_log_info("Card[%d] pos(%f,%f) target(%f,%f)", i, card->pos.x, card->pos.y, card->target_pos.x, card->target_pos.y);
 		if (card->pos.x != card->target_pos.x || card->pos.y != card->target_pos.y) {
 			if (vec2_dist(card->pos, card->target_pos) < 0.1) {
 				card->pos = card->target_pos;
@@ -728,6 +707,48 @@ static bool step_cards_towards_target(f32 rate) {
 		}
 	}
 	return any_card_moved;
+}
+
+static void solitaire_update_win(void) {
+
+}
+
+static void solitaire_update_autocomplete(void) {
+	bool tableau_empty = is_tableau_empty();
+
+	if (!tableau_empty && game.deal_countdown <= 0) {
+		bool card_transferred = false;
+		for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
+			if (card_transferred) break;
+			Card *tableau_top = pile_peek_top(&game.tableau[i]);
+			if (!tableau_top) continue;
+			for (i32 j=0; j<ARRAY_COUNT(game.foundations); ++j) {
+				if (card_transferred) break;
+				Card *foundation_top = pile_peek_top(&game.foundations[j]);
+				if (foundation_top) {
+					if (tableau_top->suit == foundation_top->suit &&
+						tableau_top->kind == foundation_top->kind + 1)
+					{
+						pile_transfer(&game.foundations[j], tableau_top, false);
+						card_transferred = true;
+					}
+				} else if (tableau_top->kind == CARD_ACE){
+					pile_transfer(&game.foundations[j], tableau_top, false);
+					card_transferred = true;
+				}
+			}
+		}
+		assert(card_transferred);
+		game.deal_countdown += game.deal_delay;
+	} else {
+		game.deal_countdown -= game.dt;
+	}
+
+	bool any_card_moved = step_cards_towards_target(game.deal_speed);
+
+	if (tableau_empty && !any_card_moved) {
+		game.state = STATE_WIN;
+	}
 }
 
 static void solitaire_update_dealing(void) {
@@ -762,6 +783,8 @@ static void solitaire_update_dealing(void) {
 }
 
 static void solitaire_update_play(void) {
+	step_cards_towards_target(game.card_animate_speed);
+
 	Card *hovered_card = get_hovered_card();
 
 	if (pressed(game.mouse_input.left)) {
@@ -814,10 +837,13 @@ static void solitaire_update_play(void) {
 			if (move_success) {
 				reveal_tableau_card();
 
-				autocomplete_if_possible();
+				if (is_autocomplete_possible()) {
+					oc_log_info("autocompleting");
+					game.deal_countdown = game.deal_delay;
+					game.state = STATE_AUTOCOMPLETE;
+				}
 
 				if (is_game_won()) {
-					game.win = true;
 					oc_log_info("YOU WIN!");
 				}
 			} else {
@@ -868,12 +894,22 @@ static void end_frame_input(void) {
 
 static void solitaire_update(void) {
 
-	if (game.state == STATE_DEALING) {
+	switch (game.state) {
+	case STATE_DEALING:
 		solitaire_update_dealing();
-	} else {
-		assert(game.state == STATE_PLAY);
-		step_cards_towards_target(game.card_animate_speed);
+		break;
+	case STATE_PLAY:
 		solitaire_update_play();
+		break;
+	case STATE_AUTOCOMPLETE:
+		solitaire_update_autocomplete();
+		break;
+	case STATE_WIN:
+		solitaire_update_win();
+		break;
+	default: 
+		assert(0);
+		break;
 	}
 
 	if (pressed(game.input.num1)) {

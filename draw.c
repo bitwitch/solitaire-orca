@@ -137,14 +137,14 @@ static void solitaire_draw(void) {
     oc_set_color_rgba(10.0f / 255.0f, 31.0f / 255.0f, 72.0f / 255.0f, 1);
     oc_clear();
 
-	draw_stock();
 	draw_waste();
-	draw_foundations();
+	draw_stock();
 	draw_tableau();
+	draw_foundations();
 
 	draw_dragging();
 
-	if (game.win) {
+	if (game.state == STATE_WIN) {
 		draw_win_text();
 	}
 

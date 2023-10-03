@@ -75,11 +75,12 @@ typedef enum {
 	STATE_NONE,
 	STATE_DEALING,
 	STATE_PLAY,
+	STATE_AUTOCOMPLETE,
+	STATE_WIN,
 } StateKind;
 
 typedef struct {
 	StateKind state;
-	bool win;
 	oc_surface surface;
 	oc_canvas canvas;
 	oc_font font;
