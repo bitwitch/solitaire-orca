@@ -70,7 +70,7 @@ typedef struct {
 
 typedef struct {
 	DigitalInput r;
-	DigitalInput num1, num2, num3, num4, num5;
+	DigitalInput num1, num2, num3, num4, num5, num6, num7, num8, num9, num0;
 } Input;
 
 typedef enum {
@@ -78,6 +78,7 @@ typedef enum {
 	STATE_DEALING,
 	STATE_PLAY,
 	STATE_AUTOCOMPLETE,
+	STATE_TRANSITION_TO_WIN,
 	STATE_WIN,
 } StateKind;
 
@@ -100,6 +101,8 @@ typedef struct {
 	i32 deal_tableau_remaining; // where to deal cards
 	i32 deal_cards_remaining;
 
+	f32 transition_to_win_countdown;
+	f32 transition_to_win_delay;
 	i32 win_foundation_index;
 	Card *win_moving_card;
 
@@ -115,7 +118,7 @@ typedef struct {
 
 	Card *card_dragging;
 	
-	oc_image spritesheet, card_backs[5];
+	oc_image spritesheet, reload_icon, card_backs[10];
 	u32 selected_card_back;
 	oc_rect card_sprite_rects[SUIT_COUNT][CARD_KIND_COUNT]; 
 	Card cards[SUIT_COUNT*CARD_KIND_COUNT];

@@ -1,3 +1,16 @@
+static void draw_card(Card *card) {
+	oc_rect dest = { card->pos.x, card->pos.y, game.card_width, game.card_height };
+	if (card->face_up) {
+		oc_image_draw_region(game.spritesheet, game.card_sprite_rects[card->suit][card->kind], dest);
+	} else {
+		oc_image_draw(game.card_backs[game.selected_card_back], dest);
+	}
+	// draw outline around card
+	oc_set_color_rgba(0.1, 0.1, 0.1, 0.69);
+	oc_set_width(1);
+	oc_rectangle_stroke(dest.x, dest.y, game.card_width, game.card_height);
+}
+
 static void draw_stock(void) {
 	u32 border_width = 2;
 	oc_set_width(border_width);
@@ -9,69 +22,65 @@ static void draw_stock(void) {
 		game.card_height - border_width,
 		5);
 
-	// TODO(shaw): draw an icon to indicate clicking to reset stock pile
-
-	oc_list_for_reverse(game.stock.cards, card, Card, node) {
-		oc_rect dest = { card->pos.x, card->pos.y, game.card_width, game.card_height };
-		oc_image_draw(game.card_backs[game.selected_card_back], dest);
+	if (oc_list_empty(game.stock.cards)) {
+		oc_rect dest = { game.stock.pos.x, game.stock.pos.y, game.card_width, game.card_height };
+		oc_image_draw(game.reload_icon, dest);
+	} else {
+		oc_list_for_reverse(game.stock.cards, card, Card, node) {
+			draw_card(card);
+		}
 	}
 }
 
 static void draw_waste(void) {
 	oc_list_for_reverse(game.waste.cards, card, Card, node) {
 		if (game.card_dragging == card) break;
-		oc_rect dest = { card->pos.x, card->pos.y, game.card_width, game.card_height };
-		oc_image_draw_region(game.spritesheet, game.card_sprite_rects[card->suit][card->kind], dest);
+		draw_card(card);
 	}
 }
 
 static void draw_foundations(void) {
+	// draw empty pile outlines
 	u32 border_width = 2;
 	oc_set_width(border_width);
-	oc_set_color_rgba(0.69, 0.69, 0.69, 0.69); // empty pile outline color
+	oc_set_color_rgba(0.69, 0.69, 0.69, 0.69);
 	for (i32 i=0; i<ARRAY_COUNT(game.foundations); ++i) {
-		oc_rect dest = {
-			.x = game.foundations[i].pos.x, 
-			.y = game.foundations[i].pos.y,
-			.w = game.card_width, 
-			.h = game.card_height };
-
 		oc_rounded_rectangle_stroke(
-			dest.x + (0.5f * border_width), 
-			dest.y + (0.5f * border_width), 
+			game.foundations[i].pos.x + (0.5f * border_width), 
+			game.foundations[i].pos.y + (0.5f * border_width), 
 			game.card_width - border_width, 
 			game.card_height - border_width,  
 			5);
+	}
 
+	// draw cards
+	for (i32 i=0; i<ARRAY_COUNT(game.foundations); ++i) {
 		oc_list_for_reverse(game.foundations[i].cards, card, Card, node) {
 			if (game.card_dragging == card) break;
-			oc_rect dest = { card->pos.x, card->pos.y, game.card_width, game.card_height };
-			oc_image_draw_region(game.spritesheet, game.card_sprite_rects[card->suit][card->kind], dest);
+			draw_card(card);
 		}
 	}
 }
 
 static void draw_tableau(void) {
+	// draw empty pile outlines
 	u32 border_width = 2;
 	oc_set_width(border_width);
-	oc_set_color_rgba(0.42, 0.42, 0.42, 0.69); // empty pile outline color
+	oc_set_color_rgba(0.42, 0.42, 0.42, 0.69);
 	for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
-
 		oc_rounded_rectangle_stroke(
 			game.tableau[i].pos.x + (0.5f * border_width), 
 			game.tableau[i].pos.y + (0.5f * border_width), 
 			game.card_width - border_width, 
 			game.card_height - border_width, 
 			5);
+	}
 
+	// draw cards
+	for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
 		oc_list_for_reverse(game.tableau[i].cards, card, Card, node) {
 			if (game.card_dragging == card) break;
-			oc_rect dest = { card->pos.x, card->pos.y, game.card_width, game.card_height };
-			if (card->face_up) {
-				oc_image_draw_region(game.spritesheet, game.card_sprite_rects[card->suit][card->kind], dest);
-			} else {
-				oc_image_draw(game.card_backs[game.selected_card_back], dest);
-			}
+			draw_card(card);
 		}
 	}
 }
@@ -81,8 +90,7 @@ static void draw_dragging(void) {
 
 	for (oc_list_elt *node = &game.card_dragging->node; node; node = oc_list_prev(node)) {
 		Card *card = oc_list_entry(node, Card, node);
-		oc_rect dest = { card->pos.x, card->pos.y, game.card_width, game.card_height };
-		oc_image_draw_region(game.spritesheet, game.card_sprite_rects[card->suit][card->kind], dest);
+		draw_card(card);
 	}
 }
 
@@ -135,14 +143,21 @@ static void draw_win_text(void) {
 static void solitaire_draw(void) {
     oc_canvas_select(game.canvas);
 
-	if (game.state == STATE_WIN) {
+	if (game.state == STATE_TRANSITION_TO_WIN) {
+		oc_set_should_clear(true);
+		oc_set_color_rgba(10.0f / 255.0f, 31.0f / 255.0f, 72.0f / 255.0f, 1);
+		oc_clear();
+		draw_tableau();
+		draw_foundations();
+
+	} else if (game.state == STATE_WIN) {
 		oc_set_should_clear(false);
-		// draw_win_text();
 		Card *card = game.win_moving_card;
 		if (card) {
 			oc_rect dest = { card->pos.x, card->pos.y, game.card_width, game.card_height };
 			oc_image_draw_region(game.spritesheet, game.card_sprite_rects[card->suit][card->kind], dest);
 		}
+		
 	} else {
 		oc_set_should_clear(true);
 		oc_set_color_rgba(10.0f / 255.0f, 31.0f / 255.0f, 72.0f / 255.0f, 1);

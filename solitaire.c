@@ -136,7 +136,13 @@ static void load_card_images(void) {
 	game.card_backs[2] = oc_image_create_from_path(game.surface, OC_STR8("Card-Back-02.png"), false);
 	game.card_backs[3] = oc_image_create_from_path(game.surface, OC_STR8("Card-Back-03.png"), false);
 	game.card_backs[4] = oc_image_create_from_path(game.surface, OC_STR8("Card-Back-04.png"), false);
-	game.spritesheet = oc_image_create_from_path(game.surface, OC_STR8("classic_13x4x280x390_compressed.png"), false);
+	game.card_backs[5] = oc_image_create_from_path(game.surface, OC_STR8("Card-Back-05.png"), false);
+	game.card_backs[6] = oc_image_create_from_path(game.surface, OC_STR8("Card-Back-06.png"), false);
+	game.card_backs[7] = oc_image_create_from_path(game.surface, OC_STR8("Card-Back-07.png"), false);
+	game.card_backs[8] = oc_image_create_from_path(game.surface, OC_STR8("Card-Back-08.png"), false);
+	game.card_backs[9] = oc_image_create_from_path(game.surface, OC_STR8("Card-Back-09.png"), false);
+	game.spritesheet = oc_image_create_from_path(game.surface, OC_STR8("classic_13x4x280x390.png"), false);
+	game.reload_icon = oc_image_create_from_path(game.surface, OC_STR8("reload.png"), false);
 
 	u32 card_width = 280; 
 	u32 card_height = 390;
@@ -406,6 +412,7 @@ static void game_reset(void) {
 		oc_list_init(&game.tableau[i].cards);
 	}
 
+	game.transition_to_win_countdown = game.transition_to_win_delay;
 	game.win_foundation_index = 0;
 	game.win_moving_card = NULL;
 
@@ -712,6 +719,13 @@ static bool step_cards_towards_target(f32 rate) {
 	return any_card_moved;
 }
 
+static void solitaire_update_transition_to_win(void) {
+	if (game.transition_to_win_countdown <= 0) {
+		game.state = STATE_WIN;
+	} else {
+		game.transition_to_win_countdown -= game.dt;
+	}
+}
 
 static void solitaire_update_win(void) {
 	Card *card = game.win_moving_card;
@@ -777,7 +791,7 @@ static void solitaire_update_autocomplete(void) {
 	bool any_card_moved = step_cards_towards_target(game.deal_speed);
 
 	if (tableau_empty && !any_card_moved) {
-		game.state = STATE_WIN;
+		game.state = STATE_TRANSITION_TO_WIN;
 	}
 }
 
@@ -874,7 +888,7 @@ static void solitaire_update_play(void) {
 				}
 
 				if (is_game_won()) {
-					oc_log_info("YOU WIN!");
+					game.state = STATE_TRANSITION_TO_WIN;
 				}
 			} else {
 				// return cards to previous position
@@ -920,6 +934,16 @@ static void end_frame_input(void) {
 	game.mouse_input.left.was_down = game.mouse_input.left.down;
 	game.mouse_input.right.was_down = game.mouse_input.right.down;
 	game.input.r.was_down = game.input.r.down;
+	game.input.num1.was_down = game.input.num1.down;
+	game.input.num2.was_down = game.input.num2.down;
+	game.input.num3.was_down = game.input.num3.down;
+	game.input.num4.was_down = game.input.num4.down;
+	game.input.num5.was_down = game.input.num5.down;
+	game.input.num6.was_down = game.input.num6.down;
+	game.input.num7.was_down = game.input.num7.down;
+	game.input.num8.was_down = game.input.num8.down;
+	game.input.num9.was_down = game.input.num9.down;
+	game.input.num0.was_down = game.input.num0.down;
 }
 
 static void solitaire_update(void) {
@@ -933,6 +957,9 @@ static void solitaire_update(void) {
 		break;
 	case STATE_AUTOCOMPLETE:
 		solitaire_update_autocomplete();
+		break;
+	case STATE_TRANSITION_TO_WIN:
+		solitaire_update_transition_to_win();
 		break;
 	case STATE_WIN:
 		solitaire_update_win();
@@ -952,6 +979,16 @@ static void solitaire_update(void) {
 		game.selected_card_back = 3;
 	} else if (pressed(game.input.num5)) {
 		game.selected_card_back = 4;
+	} else if (pressed(game.input.num6)) {
+		game.selected_card_back = 5;
+	} else if (pressed(game.input.num7)) {
+		game.selected_card_back = 6;
+	} else if (pressed(game.input.num8)) {
+		game.selected_card_back = 7;
+	} else if (pressed(game.input.num9)) {
+		game.selected_card_back = 8;
+	} else if (pressed(game.input.num0)) {
+		game.selected_card_back = 9;
 	}
 
 	if (pressed(game.input.r)) {
@@ -998,6 +1035,8 @@ ORCA_EXPORT void oc_on_init(void) {
 
     game.last_timestamp = oc_clock_time(OC_CLOCK_DATE);
 
+	game.transition_to_win_delay = 0.02;
+
 	game.deal_countdown = 0;
 	game.deal_delay = 0.1;
 	game.deal_tableau_index = 0;
@@ -1032,6 +1071,11 @@ ORCA_EXPORT void oc_on_key_down(oc_scan_code scan, oc_key_code key) {
 	case OC_KEY_3: game.input.num3.down = true; break;
 	case OC_KEY_4: game.input.num4.down = true; break;
 	case OC_KEY_5: game.input.num5.down = true; break;
+	case OC_KEY_6: game.input.num6.down = true; break;
+	case OC_KEY_7: game.input.num7.down = true; break;
+	case OC_KEY_8: game.input.num8.down = true; break;
+	case OC_KEY_9: game.input.num9.down = true; break;
+	case OC_KEY_0: game.input.num0.down = true; break;
 	default:
 		break;
 	}
@@ -1046,6 +1090,11 @@ ORCA_EXPORT void oc_on_key_up(oc_scan_code scan, oc_key_code key) {
 	case OC_KEY_3: game.input.num3.down = false; break;
 	case OC_KEY_4: game.input.num4.down = false; break;
 	case OC_KEY_5: game.input.num5.down = false; break;
+	case OC_KEY_6: game.input.num6.down = false; break;
+	case OC_KEY_7: game.input.num7.down = false; break;
+	case OC_KEY_8: game.input.num8.down = false; break;
+	case OC_KEY_9: game.input.num9.down = false; break;
+	case OC_KEY_0: game.input.num0.down = false; break;
 	default:
 		break;
 	}
