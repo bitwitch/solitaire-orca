@@ -2,7 +2,7 @@
 #define CARD_ASPECT (560.0f/780.0f)
 #define STOCK_OFFSET_BETWEEN_CARDS 0.5
 #define MAX_DIST_CONSIDERED_CLICK 2.0f 
-#define GRAVITY 980.0f
+#define GRAVITY 2000.0f
 
 typedef enum {
 	PILE_NONE,

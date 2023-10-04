@@ -723,10 +723,10 @@ static void solitaire_update_win(void) {
 		card = pile_pop(&game.foundations[game.win_foundation_index]);
 		game.win_foundation_index = (game.win_foundation_index + 1) % ARRAY_COUNT(game.foundations);
 		if (card) {
-			card->vel.y = rand_f32() * 200.0f - 300.0f;
+			card->vel.y = rand_f32() * 300.0f - 400.0f;
 			f32 rand_val = rand_f32();
 			f32 dir = rand_val > 0.5f ? -1.0f : 1.0f;
-			card->vel.x = (rand_val * 40.0f + 45.0f) * dir;
+			card->vel.x = (rand_val * 420.0f + 45.0f) * dir;
 		}
 		game.win_moving_card = card;
 	}
