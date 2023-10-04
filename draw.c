@@ -134,21 +134,28 @@ static void draw_win_text(void) {
 
 static void solitaire_draw(void) {
     oc_canvas_select(game.canvas);
-    oc_set_color_rgba(10.0f / 255.0f, 31.0f / 255.0f, 72.0f / 255.0f, 1);
-    oc_clear();
-
-	draw_waste();
-	draw_stock();
-	draw_tableau();
-	draw_foundations();
-
-	draw_dragging();
 
 	if (game.state == STATE_WIN) {
-		draw_win_text();
+		oc_set_should_clear(false);
+		// draw_win_text();
+		Card *card = game.win_moving_card;
+		if (card) {
+			oc_rect dest = { card->pos.x, card->pos.y, game.card_width, game.card_height };
+			oc_image_draw_region(game.spritesheet, game.card_sprite_rects[card->suit][card->kind], dest);
+		}
+	} else {
+		oc_set_should_clear(true);
+		oc_set_color_rgba(10.0f / 255.0f, 31.0f / 255.0f, 72.0f / 255.0f, 1);
+		oc_clear();
+		draw_waste();
+		draw_stock();
+		draw_tableau();
+		draw_foundations();
+
+		draw_dragging();
 	}
 
-    oc_surface_select(game.surface);
+	oc_surface_select(game.surface);
     oc_render(game.canvas);
     oc_surface_present(game.surface);
 }

@@ -26,3 +26,7 @@ u32 rand_range_u32(u32 min, u32 max) {
 	u32 range = max - min + 1;
 	return min + (pcg32() % range);
 }
+
+f32 rand_f32(void) {
+	return (f32)((f64)pcg32() / (f64)UINT32_MAX);
+}

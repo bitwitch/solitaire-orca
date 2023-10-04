@@ -1,7 +1,8 @@
-#define ARRAY_COUNT(array) sizeof(array) / sizeof(*(array))
+#define ARRAY_COUNT(array) (sizeof(array) / sizeof(*(array)))
 #define CARD_ASPECT (560.0f/780.0f)
 #define STOCK_OFFSET_BETWEEN_CARDS 0.5
 #define MAX_DIST_CONSIDERED_CLICK 2.0f 
+#define GRAVITY 980.0f
 
 typedef enum {
 	PILE_NONE,
@@ -47,6 +48,7 @@ typedef struct {
 	CardKind kind;
 	Pile *pile;
 	oc_vec2 pos;
+	oc_vec2 vel; // for win animation
 	oc_vec2 target_pos;
 	oc_vec2 drag_offset; // offset from mouse to top left corner of card
 	oc_vec2 pos_before_drag;
@@ -97,6 +99,9 @@ typedef struct {
 	i32 deal_tableau_index;     // used for calculating 
 	i32 deal_tableau_remaining; // where to deal cards
 	i32 deal_cards_remaining;
+
+	i32 win_foundation_index;
+	Card *win_moving_card;
 
 	oc_vec2 frame_size;
 	oc_vec2 board_margin;

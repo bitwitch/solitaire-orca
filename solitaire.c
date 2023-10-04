@@ -406,6 +406,9 @@ static void game_reset(void) {
 		oc_list_init(&game.tableau[i].cards);
 	}
 
+	game.win_foundation_index = 0;
+	game.win_moving_card = NULL;
+
 	game.deal_countdown = 0;
 	game.deal_tableau_index = 0;
 	game.deal_tableau_remaining = ARRAY_COUNT(game.tableau);
@@ -709,8 +712,35 @@ static bool step_cards_towards_target(f32 rate) {
 	return any_card_moved;
 }
 
-static void solitaire_update_win(void) {
 
+static void solitaire_update_win(void) {
+	Card *card = game.win_moving_card;
+	bool launch_next_card = !card 
+		|| (card->pos.x + game.card_width < 0)
+		|| (card->pos.x > game.frame_size.x);
+
+	if (launch_next_card) {
+		card = pile_pop(&game.foundations[game.win_foundation_index]);
+		game.win_foundation_index = (game.win_foundation_index + 1) % ARRAY_COUNT(game.foundations);
+		if (card) {
+			card->vel.y = rand_f32() * 200.0f - 300.0f;
+			f32 rand_val = rand_f32();
+			f32 dir = rand_val > 0.5f ? -1.0f : 1.0f;
+			card->vel.x = (rand_val * 40.0f + 45.0f) * dir;
+		}
+		game.win_moving_card = card;
+	}
+
+	// tick launched card
+	if (card) {
+		card->vel.y += GRAVITY * game.dt;
+		card->pos.x += card->vel.x * game.dt;
+		card->pos.y += card->vel.y * game.dt;
+		if (card->vel.y > 0 && card->pos.y + game.card_height >= game.frame_size.y) {
+			card->vel.y *= -0.88f;
+		}
+		// card->target_pos = card->pos;
+	}
 }
 
 static void solitaire_update_autocomplete(void) {
