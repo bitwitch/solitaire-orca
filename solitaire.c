@@ -668,7 +668,7 @@ static bool is_autocomplete_possible(void) {
 }
 
 static bool auto_transfer_card_to_foundation(Card *card) {
-	if (card->pile->kind == PILE_FOUNDATION || card->node.prev != NULL) {
+	if (card->pile->kind == PILE_FOUNDATION || card->pile->kind == PILE_STOCK || card->node.prev != NULL) {
 		return false;
 	}
 

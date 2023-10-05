@@ -11,6 +11,8 @@ TODO:
     slot and can go in both, prefer the pile
 
 DONE:
+[X] bug: right clicking a face down ace on top of the stock transfers it to
+    foundation face down
 [X] animation on game end (oldschool windows solitaire style)
 [X] animate cards when autocompleting
 [X] animate cards when moving to new target
