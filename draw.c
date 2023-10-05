@@ -142,35 +142,49 @@ static void draw_win_text(void) {
 
 static void solitaire_draw(void) {
     oc_canvas_select(game.canvas);
+	oc_surface_select(game.surface);
 
-	if (game.state == STATE_TRANSITION_TO_WIN) {
+	switch (game.state) {
+	case STATE_SHOW_RULES: {
 		oc_set_should_clear(true);
-		oc_set_color_rgba(10.0f / 255.0f, 31.0f / 255.0f, 72.0f / 255.0f, 1);
+		oc_set_color(game.bg_color);
+		oc_clear();
+		oc_rect dest = {0, 0, game.frame_size.x, game.frame_size.y};
+		oc_image_draw(game.rules_image, dest);
+		break;
+	}
+
+	case STATE_TRANSITION_TO_WIN:
+		oc_set_should_clear(true);
+		oc_set_color(game.bg_color);
 		oc_clear();
 		draw_tableau();
 		draw_foundations();
+		break;
 
-	} else if (game.state == STATE_WIN) {
+	case STATE_WIN: {
 		oc_set_should_clear(false);
 		Card *card = game.win_moving_card;
 		if (card) {
 			oc_rect dest = { card->pos.x, card->pos.y, game.card_width, game.card_height };
 			oc_image_draw_region(game.spritesheet, game.card_sprite_rects[card->suit][card->kind], dest);
 		}
+		break;
+	}
 		
-	} else {
+	default:
 		oc_set_should_clear(true);
-		oc_set_color_rgba(10.0f / 255.0f, 31.0f / 255.0f, 72.0f / 255.0f, 1);
+		oc_set_color(game.bg_color);
 		oc_clear();
 		draw_waste();
 		draw_stock();
 		draw_tableau();
 		draw_foundations();
-
 		draw_dragging();
+		break;
 	}
 
-	oc_surface_select(game.surface);
+	oc_ui_draw();
     oc_render(game.canvas);
     oc_surface_present(game.surface);
 }

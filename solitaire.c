@@ -108,7 +108,7 @@ static void set_sizes_based_on_viewport(u32 width, u32 height) {
     game.frame_size.x = width;
     game.frame_size.y = height;
 	game.board_margin.x = 50;
-	game.board_margin.y = 25;
+	game.board_margin.y = 50;
 	game.card_width = ((f32)width * 0.75f) / 7.0f;
 	game.card_height = (f32)game.card_width / CARD_ASPECT;
 	game.card_margin_x = (((f32)width * 0.25f) - (2.0f * (f32)game.board_margin.x)) / (ARRAY_COUNT(game.tableau) - 1);
@@ -130,7 +130,7 @@ static void set_sizes_based_on_viewport(u32 width, u32 height) {
 	}
 }
 
-static void load_card_images(void) {
+static void load_images(void) {
 	game.card_backs[0] = oc_image_create_from_path(game.surface, OC_STR8("Card-Back-00.png"), false);
 	game.card_backs[1] = oc_image_create_from_path(game.surface, OC_STR8("Card-Back-01.png"), false);
 	game.card_backs[2] = oc_image_create_from_path(game.surface, OC_STR8("Card-Back-02.png"), false);
@@ -143,6 +143,7 @@ static void load_card_images(void) {
 	game.card_backs[9] = oc_image_create_from_path(game.surface, OC_STR8("Card-Back-09.png"), false);
 	game.spritesheet = oc_image_create_from_path(game.surface, OC_STR8("classic_13x4x280x390.png"), false);
 	game.reload_icon = oc_image_create_from_path(game.surface, OC_STR8("reload.png"), false);
+	game.rules_image = oc_image_create_from_path(game.surface, OC_STR8("klondike_rules.png"), false);
 
 	u32 card_width = 280; 
 	u32 card_height = 390;
@@ -826,8 +827,17 @@ static void solitaire_update_dealing(void) {
 	}
 }
 
+static void solitaire_update_show_rules(void) {
+	if (pressed(game.mouse_input.left)) {
+		game.state = game.restore_state;
+	}
+}
+
 static void solitaire_update_play(void) {
 	step_cards_towards_target(game.card_animate_speed);
+
+	// freeze user input dealing with gameplay while menu is open
+	if (game.menu_opened) return;
 
 	Card *hovered_card = get_hovered_card();
 
@@ -930,6 +940,7 @@ static void solitaire_update_play(void) {
 	}
 }
 
+
 static void end_frame_input(void) {
 	game.mouse_input.left.was_down = game.mouse_input.left.down;
 	game.mouse_input.right.was_down = game.mouse_input.right.down;
@@ -954,6 +965,9 @@ static void solitaire_update(void) {
 		break;
 	case STATE_PLAY:
 		solitaire_update_play();
+		break;
+	case STATE_SHOW_RULES:
+		solitaire_update_show_rules();
 		break;
 	case STATE_AUTOCOMPLETE:
 		solitaire_update_autocomplete();
@@ -998,6 +1012,40 @@ static void solitaire_update(void) {
 	end_frame_input();
 }
 
+static void solitaire_menu(void) {
+	oc_ui_box *menu = NULL;
+
+	oc_ui_style style = { .font = game.font, .bgColor = game.menu_bg_color };
+	oc_ui_style_mask style_mask = OC_UI_STYLE_FONT | OC_UI_STYLE_BG_COLOR;
+	oc_ui_frame(game.frame_size, &style, style_mask) 
+	{
+		oc_ui_menu_bar("menu_bar") 
+		{
+			oc_ui_menu_begin("Game");
+			{
+				menu = oc_ui_box_top();
+
+				if(oc_ui_menu_button("New Game").pressed) {
+					game_reset();
+				}
+				if(oc_ui_menu_button("How to Play").pressed) {
+					game.restore_state = game.state;
+					game.state = STATE_SHOW_RULES;
+					game.mouse_input.left.down = false;
+				}
+				if(oc_ui_menu_button("Select Card Back").pressed) {
+					oc_log_info("clicked card backs");
+					game.mouse_input.left.down = false;
+				}
+			}
+			oc_ui_menu_end();
+		}
+	}
+
+	assert(menu);
+	game.menu_opened = !oc_ui_box_closed(menu);
+}
+
 ORCA_EXPORT void oc_on_init(void) {
 	// initialize random number generator
 	f64 ftime = oc_clock_time(OC_CLOCK_MONOTONIC);
@@ -1017,11 +1065,16 @@ ORCA_EXPORT void oc_on_init(void) {
     };
 	game.font = oc_font_create_from_path(OC_STR8("segoeui.ttf"), 5, ranges);
 
-	oc_vec2 viewport_size = { 1000, 750 };
+	game.bg_color = (oc_color){ 10.0f/255.0f, 31.0f/255.0f, 72.0f/255.0f, 1 };
+	game.menu_bg_color = (oc_color){ 12.0f/255.0f, 41.0f/255.0f, 80.0f/255.0f, 1 };
+
+	oc_vec2 viewport_size = { 1000, 775 };
 	set_sizes_based_on_viewport(viewport_size.x, viewport_size.y);
 	oc_window_set_size(viewport_size);
 
-	load_card_images();
+	oc_ui_init(&game.ui);
+
+	load_images();
 	game.selected_card_back = 0;
 
 	game.stock.kind = PILE_STOCK;
@@ -1123,11 +1176,16 @@ ORCA_EXPORT void oc_on_mouse_move(float x, float y, float dx, float dy) {
     game.mouse_input.deltaY = dy;
 }
 
+ORCA_EXPORT void oc_on_raw_event(oc_event* event) {
+    oc_ui_process_event(event);
+}
+
 ORCA_EXPORT void oc_on_frame_refresh(void) {
     f64 timestamp = oc_clock_time(OC_CLOCK_DATE);
 	game.dt = timestamp - game.last_timestamp;
 	game.last_timestamp = timestamp;
 
+	solitaire_menu();
 	solitaire_update();
 	solitaire_draw();
 }

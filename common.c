@@ -77,16 +77,22 @@ typedef enum {
 	STATE_NONE,
 	STATE_DEALING,
 	STATE_PLAY,
+	STATE_SHOW_RULES,
 	STATE_AUTOCOMPLETE,
 	STATE_TRANSITION_TO_WIN,
 	STATE_WIN,
 } StateKind;
 
 typedef struct {
-	StateKind state;
+	StateKind state, restore_state;
 	oc_surface surface;
 	oc_canvas canvas;
+	oc_ui_context ui;
 	oc_font font;
+	oc_color bg_color;
+	oc_color menu_bg_color;
+	bool menu_opened;
+
 	MouseInput mouse_input;
 	Input input;
 	oc_vec2 mouse_pos_on_mouse_right_down;
@@ -118,7 +124,7 @@ typedef struct {
 
 	Card *card_dragging;
 	
-	oc_image spritesheet, reload_icon, card_backs[10];
+	oc_image spritesheet, reload_icon, rules_image, card_backs[10];
 	u32 selected_card_back;
 	oc_rect card_sprite_rects[SUIT_COUNT][CARD_KIND_COUNT]; 
 	Card cards[SUIT_COUNT*CARD_KIND_COUNT];

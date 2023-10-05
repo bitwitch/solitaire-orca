@@ -1,16 +1,16 @@
 TODO:
+[X] make a menu
+	[ ] describe controls
+	[X] show rules
+	[X] new game
+	[ ] choose card back
 [ ] shift+alt+2 to trigger win animation
 [ ] add some sound
-[ ] restart button (maybe, we already have r key to restart)
-[ ] make a menu
-	[ ] describe controls
-	[ ] maybe describe rules
-	[ ] new game
-	[ ] choose card back
 [ ] on tableau when dropping a card, if it overlaps both a pile and an empty
     slot and can go in both, prefer the pile
 
 DONE:
+[X] restart button (maybe, we already have r key to restart)
 [X] bug: right clicking a face down ace on top of the stock transfers it to
     foundation face down
 [X] animation on game end (oldschool windows solitaire style)
