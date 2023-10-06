@@ -1088,7 +1088,8 @@ ORCA_EXPORT void oc_on_init(void) {
 
     game.last_timestamp = oc_clock_time(OC_CLOCK_DATE);
 
-	game.transition_to_win_delay = 0.05;
+	game.transition_to_win_delay = 0.01;
+	game.transition_to_win_countdown = game.transition_to_win_delay;
 
 	game.deal_countdown = 0;
 	game.deal_delay = 0.1;
