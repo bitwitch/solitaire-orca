@@ -374,29 +374,6 @@ static void deal_klondike(Card *cards, i32 num_cards) {
 		pile_push(&game.stock, &cards[i], true);
 	}
 
-	// move tableau cards to temporary deal pile (for animation)
-	// for (i32 i=0; i<7; ++i) {
-		// for (i32 j=0; j<i+1; ++j) {
-			// Card *card = pile_peek_top(&game.stock);
-			// pile_transfer(&game.deal_pile, card, true);
-		// }
-
-		// // deal i cards face down
-		// i32 face_down_y_offset = 0.125f * game.card_height;
-		// i32 face_up_y_offset = 0.25f * game.card_height;
-		// i32 y_offset = 0;
-		// for (i32 i_face_down=0; i_face_down < i; ++i_face_down) {
-			// Card *card = pile_peek_top(&game.stock);
-			// card->face_up = false;
-			// pile_transfer(&game.tableau[i], card, false);
-		// }
-
-		// // deal 1 card face up
-		// Card *card = pile_peek_top(&game.stock);
-		// card->face_up = true;
-		// pile_transfer(&game.tableau[i], card, false);
-	// }
-
 	game.state = STATE_DEALING;
 }
 
@@ -833,6 +810,36 @@ static void solitaire_update_show_rules(void) {
 	}
 }
 
+static void solitaire_update_select_card_back(void) {
+	// NOTE(shaw): the ui handles transition out of STATE_SELECT_CARD_BACK
+
+	if (!game.menu_card_backs_draw_box) {
+		return;
+	}
+	oc_rect draw_box = game.menu_card_backs_draw_box->rect;
+	
+	if (pressed(game.mouse_input.left)) {
+		i32 count_first_row = ARRAY_COUNT(game.card_backs) / 2;
+
+		for (i32 i=0; i<ARRAY_COUNT(game.card_backs); ++i) {
+			f32 x = 0, y = 0;
+			if (i < count_first_row) {
+				x = draw_box.x + (i * (game.card_width + game.card_margin_x));
+				y = draw_box.y;
+			} else {
+				x = draw_box.x + ((i - count_first_row) * (game.card_width + game.card_margin_x));
+				y = draw_box.y + game.card_height + game.card_margin_x;
+			}
+			oc_rect hitbox = { x, y, game.card_width, game.card_height };
+
+			if (point_in_rect(game.mouse_input.x, game.mouse_input.y, hitbox)) {
+				game.selected_card_back = i;
+				break;
+			}
+		}
+	}
+}
+
 static void solitaire_update_play(void) {
 	step_cards_towards_target(game.card_animate_speed);
 
@@ -969,6 +976,9 @@ static void solitaire_update(void) {
 	case STATE_SHOW_RULES:
 		solitaire_update_show_rules();
 		break;
+	case STATE_SELECT_CARD_BACK:
+		solitaire_update_select_card_back();
+		break;
 	case STATE_AUTOCOMPLETE:
 		solitaire_update_autocomplete();
 		break;
@@ -1012,6 +1022,105 @@ static void solitaire_update(void) {
 	end_frame_input();
 }
 
+static void do_card_back_menu(void) {
+	oc_ui_panel("main panel", OC_UI_FLAG_NONE)
+	{
+		oc_ui_style_next(&(oc_ui_style){ 
+				.size.width = { OC_UI_SIZE_PARENT, 1 },
+				.size.height = { OC_UI_SIZE_PARENT, 1, 1 },
+				.layout.axis = OC_UI_AXIS_Y,
+				.layout.align.x = OC_UI_ALIGN_CENTER,
+				.layout.align.y = OC_UI_ALIGN_CENTER,
+				.layout.margin.x = 16,
+				.layout.margin.y = 16,
+				.layout.spacing = 16 },
+				OC_UI_STYLE_SIZE
+				| OC_UI_STYLE_LAYOUT_AXIS
+				| OC_UI_STYLE_LAYOUT_ALIGN_X
+				| OC_UI_STYLE_LAYOUT_ALIGN_Y
+				| OC_UI_STYLE_LAYOUT_MARGINS
+				| OC_UI_STYLE_LAYOUT_SPACING);
+
+		oc_ui_container("card backs", OC_UI_FLAG_NONE)
+		{
+			oc_ui_style_next(&(oc_ui_style){ 
+					.size.width = { OC_UI_SIZE_CHILDREN },
+					.size.height = { OC_UI_SIZE_CHILDREN },
+					.layout.axis = OC_UI_AXIS_Y,
+					.layout.margin.x = game.menu_card_backs_margin,
+					.layout.margin.y = game.menu_card_backs_margin,
+					.layout.spacing = 24,
+					.bgColor = game.ui.theme->bg1,
+					.borderColor = game.ui.theme->border,
+					.borderSize = 1,
+					.roundness = game.ui.theme->roundnessSmall },
+					OC_UI_STYLE_SIZE
+					| OC_UI_STYLE_LAYOUT_AXIS
+					| OC_UI_STYLE_LAYOUT_MARGINS
+					| OC_UI_STYLE_LAYOUT_SPACING
+					| OC_UI_STYLE_BG_COLOR
+					| OC_UI_STYLE_BORDER_COLOR
+					| OC_UI_STYLE_BORDER_SIZE
+					| OC_UI_STYLE_ROUNDNESS);
+
+			oc_ui_box_begin("Select Card Back", OC_UI_FLAG_DRAW_BACKGROUND | OC_UI_FLAG_DRAW_BORDER);
+
+			oc_ui_style_next(&(oc_ui_style){ 
+					.size.width = { OC_UI_SIZE_PARENT, 1 },
+					.layout.align.x = OC_UI_ALIGN_CENTER },
+					OC_UI_STYLE_SIZE_WIDTH | OC_UI_STYLE_LAYOUT_ALIGN_X);
+			oc_ui_container("header", OC_UI_FLAG_NONE)
+			{
+				oc_ui_style_next(&(oc_ui_style){ .fontSize = 18 },
+						OC_UI_STYLE_FONT_SIZE);
+				oc_ui_label("Select Card Back");
+			}
+
+			oc_ui_style_next(&(oc_ui_style){ 
+					.size.width = { OC_UI_SIZE_PARENT, 1 },
+					.size.height = { OC_UI_SIZE_PARENT, 1, 1 },
+					.layout.align.x = OC_UI_ALIGN_CENTER,
+					.layout.align.y = OC_UI_ALIGN_CENTER,
+					.layout.spacing = 24 },
+					OC_UI_STYLE_SIZE
+					| OC_UI_STYLE_LAYOUT_ALIGN_X
+					| OC_UI_STYLE_LAYOUT_ALIGN_Y
+					| OC_UI_STYLE_LAYOUT_SPACING);
+			oc_ui_box_begin("contents", OC_UI_FLAG_NONE);
+
+			// box for drawing card backs into
+			i32 cards_per_row = ARRAY_COUNT(game.card_backs) - (ARRAY_COUNT(game.card_backs) / 2);
+			f32 row_width = (cards_per_row * game.card_width) + ((cards_per_row - 1) * game.card_margin_x);
+			f32 total_height = (2 * game.card_height) + game.card_margin_x;
+			oc_ui_style_next(&(oc_ui_style){ 
+					.size.width = { OC_UI_SIZE_PIXELS, row_width},
+					.size.height = { OC_UI_SIZE_PIXELS, total_height } },
+					OC_UI_STYLE_SIZE);
+			oc_ui_box_begin("space to draw cards", OC_UI_FLAG_NONE);
+
+			game.menu_card_backs_draw_box = oc_ui_box_top();
+			// draw code will draw card backs here and update code will handle selection
+			// since orca doesn't seem to have image buttons
+
+			oc_ui_box_end(); // space to draw cards
+
+			oc_ui_style_next(&(oc_ui_style){ .color = game.ui.theme->white }, OC_UI_STYLE_COLOR);
+			if(oc_ui_button("OK").clicked) {
+				game.state = game.restore_state;
+			}
+
+			oc_ui_box_end(); // contents
+			oc_ui_box_end(); // card backs
+		}
+	}
+}
+
+static void set_restore_state(void) {
+	if (game.state != STATE_SHOW_RULES && game.state != STATE_SELECT_CARD_BACK) {
+		game.restore_state = game.state;
+	}
+}
+
 static void solitaire_menu(void) {
 	oc_ui_box *menu = NULL;
 
@@ -1029,16 +1138,21 @@ static void solitaire_menu(void) {
 					game_reset();
 				}
 				if(oc_ui_menu_button("How to Play").pressed) {
-					game.restore_state = game.state;
+					set_restore_state();
 					game.state = STATE_SHOW_RULES;
 					game.mouse_input.left.down = false;
 				}
 				if(oc_ui_menu_button("Select Card Back").pressed) {
-					oc_log_info("clicked card backs");
+					set_restore_state();
+					game.state = STATE_SELECT_CARD_BACK;
 					game.mouse_input.left.down = false;
 				}
 			}
 			oc_ui_menu_end();
+		}
+
+		if (game.state == STATE_SELECT_CARD_BACK) {
+			do_card_back_menu();
 		}
 	}
 
@@ -1067,6 +1181,7 @@ ORCA_EXPORT void oc_on_init(void) {
 
 	game.bg_color = (oc_color){ 10.0f/255.0f, 31.0f/255.0f, 72.0f/255.0f, 1 };
 	game.menu_bg_color = (oc_color){ 12.0f/255.0f, 41.0f/255.0f, 80.0f/255.0f, 1 };
+	game.menu_card_backs_margin = 25;
 
 	oc_vec2 viewport_size = { 1000, 775 };
 	set_sizes_based_on_viewport(viewport_size.x, viewport_size.y);

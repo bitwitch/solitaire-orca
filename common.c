@@ -78,6 +78,7 @@ typedef enum {
 	STATE_DEALING,
 	STATE_PLAY,
 	STATE_SHOW_RULES,
+	STATE_SELECT_CARD_BACK,
 	STATE_AUTOCOMPLETE,
 	STATE_TRANSITION_TO_WIN,
 	STATE_WIN,
@@ -90,8 +91,6 @@ typedef struct {
 	oc_ui_context ui;
 	oc_font font;
 	oc_color bg_color;
-	oc_color menu_bg_color;
-	bool menu_opened;
 
 	MouseInput mouse_input;
 	Input input;
@@ -106,6 +105,11 @@ typedef struct {
 	i32 deal_tableau_index;     // used for calculating 
 	i32 deal_tableau_remaining; // where to deal cards
 	i32 deal_cards_remaining;
+
+	oc_color menu_bg_color;
+	bool menu_opened;
+	i32 menu_card_backs_margin;
+	oc_ui_box *menu_card_backs_draw_box;
 
 	f32 transition_to_win_countdown;
 	f32 transition_to_win_delay;

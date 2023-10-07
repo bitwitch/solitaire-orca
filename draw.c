@@ -140,6 +140,41 @@ static void draw_win_text(void) {
 	oc_text_fill(x, y, WIN_TEXT);
 }
 
+static void draw_select_card_back(void) {
+	if (!game.menu_card_backs_draw_box) {
+		return;
+	}
+
+	oc_rect draw_box = game.menu_card_backs_draw_box->rect;
+	i32 count_first_row = ARRAY_COUNT(game.card_backs) / 2;
+
+	for (i32 i=0; i<ARRAY_COUNT(game.card_backs); ++i) {
+		f32 x = 0, y = 0;
+		if (i < count_first_row) {
+			x = draw_box.x + (i * (game.card_width + game.card_margin_x));
+			y = draw_box.y;
+		} else {
+			x = draw_box.x + ((i - count_first_row) * (game.card_width + game.card_margin_x));
+			y = draw_box.y + game.card_height + game.card_margin_x;
+		}
+
+		oc_rect dest = { x, y, game.card_width, game.card_height };
+		oc_image_draw(game.card_backs[i], dest);
+
+		// draw outline around selected card back
+		if (i == game.selected_card_back) {
+			u32 border_width = 2;
+			oc_set_width(border_width);
+			oc_set_color_rgba(0.12, 0.81, 0.22, 1);
+			oc_rectangle_stroke(
+				dest.x - (0.5f * border_width), 
+				dest.y - (0.5f * border_width), 
+				game.card_width + border_width, 
+				game.card_height + border_width);
+		}
+	}	
+}
+
 static void solitaire_draw(void) {
     oc_canvas_select(game.canvas);
 	oc_surface_select(game.surface);
@@ -151,8 +186,21 @@ static void solitaire_draw(void) {
 		oc_clear();
 		oc_rect dest = {0, 0, game.frame_size.x, game.frame_size.y};
 		oc_image_draw(game.rules_image, dest);
+		oc_ui_draw();
 		break;
 	}
+
+	case STATE_SELECT_CARD_BACK:
+		oc_set_should_clear(true);
+		oc_set_color(game.bg_color);
+		oc_clear();
+		draw_waste();
+		draw_stock();
+		draw_tableau();
+		draw_foundations();
+		oc_ui_draw();
+		draw_select_card_back();
+		break;
 
 	case STATE_TRANSITION_TO_WIN:
 		oc_set_should_clear(true);
@@ -160,6 +208,7 @@ static void solitaire_draw(void) {
 		oc_clear();
 		draw_tableau();
 		draw_foundations();
+		oc_ui_draw();
 		break;
 
 	case STATE_WIN: {
@@ -169,6 +218,7 @@ static void solitaire_draw(void) {
 			oc_rect dest = { card->pos.x, card->pos.y, game.card_width, game.card_height };
 			oc_image_draw_region(game.spritesheet, game.card_sprite_rects[card->suit][card->kind], dest);
 		}
+		oc_ui_draw();
 		break;
 	}
 		
@@ -181,10 +231,10 @@ static void solitaire_draw(void) {
 		draw_tableau();
 		draw_foundations();
 		draw_dragging();
+		oc_ui_draw();
 		break;
 	}
 
-	oc_ui_draw();
     oc_render(game.canvas);
     oc_surface_present(game.surface);
 }
