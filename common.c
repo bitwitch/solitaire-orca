@@ -129,7 +129,7 @@ typedef struct {
 
 	Card *card_dragging;
 	
-	oc_image spritesheet, reload_icon, rules_image, card_backs[10];
+	oc_image spritesheet, reload_icon, rules_images[2], card_backs[10];
 	u32 selected_card_back;
 	oc_rect card_sprite_rects[SUIT_COUNT][CARD_KIND_COUNT]; 
 	Card cards[SUIT_COUNT*CARD_KIND_COUNT];

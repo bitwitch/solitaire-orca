@@ -143,7 +143,8 @@ static void load_images(void) {
 	game.card_backs[9] = oc_image_create_from_path(game.surface, OC_STR8("Card-Back-09.png"), false);
 	game.spritesheet = oc_image_create_from_path(game.surface, OC_STR8("classic_13x4x280x390.png"), false);
 	game.reload_icon = oc_image_create_from_path(game.surface, OC_STR8("reload.png"), false);
-	game.rules_image = oc_image_create_from_path(game.surface, OC_STR8("klondike_rules.png"), false);
+	game.rules_images[0] = oc_image_create_from_path(game.surface, OC_STR8("klondike_rules_draw_1.png"), false);
+	game.rules_images[1] = oc_image_create_from_path(game.surface, OC_STR8("klondike_rules_draw_3.png"), false);
 
 	u32 card_width = 280; 
 	u32 card_height = 390;
@@ -1177,15 +1178,27 @@ static void solitaire_menu(void) {
 			{
 				menu = oc_ui_box_top();
 
-				if(oc_ui_menu_button("New Game").pressed) {
+				if (oc_ui_menu_button("New Game").pressed) {
 					game_reset();
 				}
-				if(oc_ui_menu_button("How to Play").pressed) {
+
+				// game mode buttons: draw 1 or 3
+				{
+					const char *game_mode_text = game.draw_three_mode 
+						? "Switch Game Mode: Turn 1"
+						: "Switch Game Mode: Turn 3";
+					if (oc_ui_menu_button(game_mode_text).pressed) {
+						game.draw_three_mode = !game.draw_three_mode;
+						game_reset();
+					}
+				}
+				
+				if (oc_ui_menu_button("How to Play").pressed) {
 					set_restore_state();
 					game.state = STATE_SHOW_RULES;
 					game.mouse_input.left.down = false;
 				}
-				if(oc_ui_menu_button("Select Card Back").pressed) {
+				if (oc_ui_menu_button("Select Card Back").pressed) {
 					set_restore_state();
 					game.state = STATE_SELECT_CARD_BACK;
 					game.mouse_input.left.down = false;

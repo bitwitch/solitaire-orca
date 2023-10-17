@@ -185,7 +185,8 @@ static void solitaire_draw(void) {
 		oc_set_color(game.bg_color);
 		oc_clear();
 		oc_rect dest = {0, 0, game.frame_size.x, game.frame_size.y};
-		oc_image_draw(game.rules_image, dest);
+		oc_image rules_image = game.draw_three_mode ? game.rules_images[1] : game.rules_images[0];
+		oc_image_draw(rules_image, dest);
 		oc_ui_draw();
 		break;
 	}

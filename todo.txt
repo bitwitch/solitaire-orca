@@ -3,10 +3,12 @@
 
 
 TODO:
+[ ] make all menu buttons full width of the menu (if not possible add to orca
+    wishlist)
 [ ] animate drawing from stock to waste?
 [X] make a menu
 	[ ] describe controls
-	[ ] switch between draw 1 and draw 3 modes
+	[X] switch between draw 1 and draw 3 modes
 	[ ] change what how to play displays based on game mode
 	[X] show rules
 	[X] new game
