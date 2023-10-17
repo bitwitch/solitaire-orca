@@ -9,7 +9,7 @@ TODO:
 [X] make a menu
 	[ ] describe controls
 	[X] switch between draw 1 and draw 3 modes
-	[ ] change what how to play displays based on game mode
+	[X] change what how to play displays based on game mode
 	[X] show rules
 	[X] new game
 	[X] choose card back
