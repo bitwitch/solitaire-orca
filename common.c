@@ -86,6 +86,7 @@ typedef enum {
 
 typedef struct {
 	StateKind state, restore_state;
+	bool draw_three_mode;
 	oc_surface surface;
 	oc_canvas canvas;
 	oc_ui_context ui;

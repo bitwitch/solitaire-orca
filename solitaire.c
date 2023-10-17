@@ -160,11 +160,14 @@ static void load_images(void) {
 	}
 }
 
+static Card *pile_peek_top(Pile *pile);
+
 static void position_card_on_top_of_pile(Card *card, Pile *pile, bool instant) {
 	assert(card);
 	assert(pile);
 	oc_vec2 new_pos = {0};
 	switch(pile->kind) {
+
 	case PILE_STOCK: {
 		Card *top = oc_list_first_entry(pile->cards, Card, node);
 		if (top) {
@@ -175,10 +178,39 @@ static void position_card_on_top_of_pile(Card *card, Pile *pile, bool instant) {
 		}
 		break;
 	}
-	case PILE_WASTE:
-	case PILE_FOUNDATION:
+
+	case PILE_WASTE: {
+		if (game.draw_three_mode) {
+			i32 x_offset = 0.22f * game.card_width;
+			Card *top = pile_peek_top(&game.waste);
+			if (top) {
+				Card *second_from_top = oc_list_next_entry(game.waste.cards, top, Card, node);
+				if (second_from_top) {
+					second_from_top->pos = pile->pos;
+					second_from_top->target_pos = pile->pos;
+					i32 new_x = second_from_top->target_pos.x + x_offset;
+					top->pos.x = new_x;
+					top->target_pos.x = new_x;
+				} else {
+					top->pos = pile->pos;
+					top->target_pos = pile->pos;
+				}
+				new_pos.x = top->target_pos.x + x_offset;
+				new_pos.y = top->target_pos.y;
+			} else {
+				new_pos = pile->pos;
+			}
+		} else {
+			new_pos = pile->pos;
+		}
+		break;
+	}
+
+	case PILE_FOUNDATION: {
 		new_pos = pile->pos;
 		break;
+	}
+
 	case PILE_TABLEAU: {
 		Card *top = oc_list_first_entry(pile->cards, Card, node);
 		if (top) {
@@ -190,6 +222,7 @@ static void position_card_on_top_of_pile(Card *card, Pile *pile, bool instant) {
 		}
 		break;
 	}
+
 	default:
 		assert(0);
 		break;
@@ -512,7 +545,11 @@ static bool can_drop_empty_pile(Card *card, Pile *pile) {
 		if (pile->kind == PILE_FOUNDATION) {
 			result = card->kind == CARD_ACE;
 		} else if (pile->kind == PILE_TABLEAU) {
-			result = true;
+			if (game.draw_three_mode) {
+				result = card->kind == CARD_KING;
+			} else {
+				result = true;
+			}
 		}
 	}
 	return result;
@@ -545,7 +582,7 @@ static bool can_drop_card_on_pile(Pile *pile, Card *card) {
 		.h = game.card_height 
 	};
 
-	// check empty card
+	// check empty pile
 	if (oc_list_empty(pile->cards)) {
 		oc_rect pile_rect = {
 			.x = pile->pos.x, 
@@ -862,12 +899,18 @@ static void solitaire_update_play(void) {
 				game.card_dragging = hovered_card;
 			}
 
-			// if stock clicked, move a card to waste
+			// if stock clicked, move cards to waste
 			if (hovered_card == oc_list_first_entry(game.stock.cards, Card, node)) {
-				Card *card = pile_peek_top(&game.stock);
-				card->face_up = true;
-				pile_transfer(&game.waste, card, true);
+				i32 cards_to_transfer = game.draw_three_mode ? 3 : 1;
+				for (i32 i=0; i<cards_to_transfer; ++i) {
+					Card *card = pile_peek_top(&game.stock);
+					if (card) {
+						card->face_up = true;
+						pile_transfer(&game.waste, card, true);
+					}
+				}
 			}
+
 		} else {
 			// if empty stock clicked, move all waste to stock
 			if (oc_list_empty(game.stock.cards)) {
@@ -1169,6 +1212,8 @@ ORCA_EXPORT void oc_on_init(void) {
     oc_window_set_title(OC_STR8("Solitaire"));
     game.surface = oc_surface_canvas();
     game.canvas = oc_canvas_create();
+
+	game.draw_three_mode = true;
 
     oc_unicode_range ranges[5] = {
         OC_UNICODE_BASIC_LATIN,
