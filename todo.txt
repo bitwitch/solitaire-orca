@@ -1,9 +1,10 @@
 TODO:
+[ ] draw 3 mode
 [X] make a menu
 	[ ] describe controls
 	[X] show rules
 	[X] new game
-	[ ] choose card back
+	[X] choose card back
 [ ] shift+alt+2 to trigger win animation
 [ ] add some sound
 [ ] on tableau when dropping a card, if it overlaps both a pile and an empty
