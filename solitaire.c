@@ -187,14 +187,18 @@ static void position_card_on_top_of_pile(Card *card, Pile *pile, bool instant) {
 			if (top) {
 				Card *second_from_top = oc_list_next_entry(game.waste.cards, top, Card, node);
 				if (second_from_top) {
-					second_from_top->pos = pile->pos;
 					second_from_top->target_pos = pile->pos;
 					i32 new_x = second_from_top->target_pos.x + x_offset;
-					top->pos.x = new_x;
 					top->target_pos.x = new_x;
+					if (instant) {
+						second_from_top->pos = pile->pos;
+						top->pos.x = new_x;
+					}
 				} else {
-					top->pos = pile->pos;
 					top->target_pos = pile->pos;
+					if (instant) {
+						top->pos = pile->pos;
+					}
 				}
 				new_pos.x = top->target_pos.x + x_offset;
 				new_pos.y = top->target_pos.y;
@@ -907,7 +911,7 @@ static void solitaire_update_play(void) {
 					Card *card = pile_peek_top(&game.stock);
 					if (card) {
 						card->face_up = true;
-						pile_transfer(&game.waste, card, true);
+						pile_transfer(&game.waste, card, false);
 					}
 				}
 			}

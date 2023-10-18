@@ -195,8 +195,8 @@ static void solitaire_draw(void) {
 		oc_set_should_clear(true);
 		oc_set_color(game.bg_color);
 		oc_clear();
-		draw_waste();
 		draw_stock();
+		draw_waste();
 		draw_tableau();
 		draw_foundations();
 		oc_ui_draw();
@@ -227,8 +227,8 @@ static void solitaire_draw(void) {
 		oc_set_should_clear(true);
 		oc_set_color(game.bg_color);
 		oc_clear();
-		draw_waste();
 		draw_stock();
+		draw_waste();
 		draw_tableau();
 		draw_foundations();
 		draw_dragging();
