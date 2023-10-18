@@ -138,3 +138,37 @@ typedef struct {
 
 GameState game;
 
+static oc_ui_sig oc_ui_menu_button_fixed_width(const char* name, f32 width) {
+    oc_ui_context* ui = oc_ui_get_context();
+    oc_ui_theme* theme = ui->theme;
+
+    oc_ui_style_next(&(oc_ui_style){ .size.width = { OC_UI_SIZE_PIXELS, width },
+                                     .size.height = { OC_UI_SIZE_TEXT },
+                                     .layout.margin.x = 8,
+                                     .layout.margin.y = 4,
+                                     .bgColor = { 0, 0, 0, 0 } },
+                     OC_UI_STYLE_SIZE
+                         | OC_UI_STYLE_LAYOUT_MARGINS
+                         | OC_UI_STYLE_BG_COLOR);
+
+    oc_ui_pattern hoverPattern = { 0 };
+    oc_ui_pattern_push(&ui->frameArena, &hoverPattern, (oc_ui_selector){ .kind = OC_UI_SEL_STATUS, .status = OC_UI_HOVER });
+    oc_ui_style hoverStyle = { .bgColor = theme->fill0 };
+    oc_ui_style_match_before(hoverPattern, &hoverStyle, OC_UI_STYLE_BG_COLOR);
+
+    oc_ui_pattern activePattern = { 0 };
+    oc_ui_pattern_push(&ui->frameArena, &activePattern, (oc_ui_selector){ .kind = OC_UI_SEL_STATUS, .status = OC_UI_ACTIVE });
+    oc_ui_style activeStyle = { .bgColor = theme->fill2 };
+    oc_ui_style_match_before(activePattern, &activeStyle, OC_UI_STYLE_BG_COLOR);
+
+    oc_ui_flags flags = OC_UI_FLAG_CLICKABLE
+                      | OC_UI_FLAG_CLIP
+                      | OC_UI_FLAG_DRAW_TEXT
+                      | OC_UI_FLAG_DRAW_BACKGROUND;
+
+    oc_ui_box* box = oc_ui_box_make(name, flags);
+    oc_ui_sig sig = oc_ui_box_sig(box);
+    return (sig);
+}
+
+

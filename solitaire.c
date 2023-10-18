@@ -1176,29 +1176,29 @@ static void solitaire_menu(void) {
 		{
 			oc_ui_menu_begin("Game");
 			{
+				f32 button_width = 185;
 				menu = oc_ui_box_top();
 
-				if (oc_ui_menu_button("New Game").pressed) {
+				if (oc_ui_menu_button_fixed_width("New Game", button_width).pressed) {
 					game_reset();
 				}
 
-				// game mode buttons: draw 1 or 3
-				{
+				{ // game mode buttons: draw 1 or 3
 					const char *game_mode_text = game.draw_three_mode 
 						? "Switch Game Mode: Turn 1"
 						: "Switch Game Mode: Turn 3";
-					if (oc_ui_menu_button(game_mode_text).pressed) {
+					if (oc_ui_menu_button_fixed_width(game_mode_text, button_width).pressed) {
 						game.draw_three_mode = !game.draw_three_mode;
 						game_reset();
 					}
 				}
 				
-				if (oc_ui_menu_button("How to Play").pressed) {
+				if (oc_ui_menu_button_fixed_width("How to Play", button_width).pressed) {
 					set_restore_state();
 					game.state = STATE_SHOW_RULES;
 					game.mouse_input.left.down = false;
 				}
-				if (oc_ui_menu_button("Select Card Back").pressed) {
+				if (oc_ui_menu_button_fixed_width("Select Card Back", button_width).pressed) {
 					set_restore_state();
 					game.state = STATE_SELECT_CARD_BACK;
 					game.mouse_input.left.down = false;
