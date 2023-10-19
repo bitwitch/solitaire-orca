@@ -415,6 +415,15 @@ static void deal_klondike(Card *cards, i32 num_cards) {
 	game.state = STATE_DEALING;
 }
 
+static void set_timer_string(f64 seconds_elapsed_f64) {
+	u64 seconds_elapsed = (u64)seconds_elapsed_f64;
+	u64 seconds = seconds_elapsed % 60;
+	u64 minutes_elapsed = seconds_elapsed / 60;
+	u64 minutes = minutes_elapsed % 60;
+	u64 hours = minutes_elapsed / 60;
+	snprintf(game.timer_string, sizeof(game.timer_string), "%02llu:%02llu:%02llu", hours, minutes, seconds);
+}
+
 static void game_reset(void) {
 	game.card_dragging = false;
 	memset(&game.mouse_input, 0, sizeof(game.mouse_input));
@@ -427,6 +436,9 @@ static void game_reset(void) {
 	for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
 		oc_list_init(&game.tableau[i].cards);
 	}
+
+	game.timer = 0;
+	set_timer_string(game.timer);
 
 	game.transition_to_win_countdown = game.transition_to_win_delay;
 	game.win_foundation_index = 0;
@@ -1070,6 +1082,12 @@ static void solitaire_update(void) {
 	end_frame_input();
 }
 
+static void set_restore_state(void) {
+	if (game.state != STATE_SHOW_RULES && game.state != STATE_SELECT_CARD_BACK) {
+		game.restore_state = game.state;
+	}
+}
+
 static void do_card_back_menu(void) {
 	oc_ui_panel("main panel", OC_UI_FLAG_NONE)
 	{
@@ -1163,11 +1181,6 @@ static void do_card_back_menu(void) {
 	}
 }
 
-static void set_restore_state(void) {
-	if (game.state != STATE_SHOW_RULES && game.state != STATE_SELECT_CARD_BACK) {
-		game.restore_state = game.state;
-	}
-}
 
 static void solitaire_menu(void) {
 	oc_ui_box *menu = NULL;
@@ -1207,8 +1220,27 @@ static void solitaire_menu(void) {
 					game.state = STATE_SELECT_CARD_BACK;
 					game.mouse_input.left.down = false;
 				}
+				oc_ui_menu_end();
 			}
-			oc_ui_menu_end();
+
+			// TIMER
+			oc_ui_style_next(&(oc_ui_style){ 
+				.size.width = { OC_UI_SIZE_PARENT, 1, 1},
+				.size.height = { OC_UI_SIZE_PARENT, 1, 1 },
+				.layout.axis = OC_UI_AXIS_X,
+				.layout.align.x = OC_UI_ALIGN_END,
+				.layout.align.y = OC_UI_ALIGN_CENTER ,
+				.layout.margin.x = 15 },
+				OC_UI_STYLE_SIZE
+				| OC_UI_STYLE_LAYOUT_AXIS
+				| OC_UI_STYLE_LAYOUT_ALIGN_X
+				| OC_UI_STYLE_LAYOUT_ALIGN_Y
+				| OC_UI_STYLE_LAYOUT_MARGIN_X);
+
+			oc_ui_container("timer", OC_UI_FLAG_NONE)
+			{
+				oc_ui_label(game.timer_string);
+			}
 		}
 
 		if (game.state == STATE_SELECT_CARD_BACK) {
@@ -1244,6 +1276,9 @@ ORCA_EXPORT void oc_on_init(void) {
 	game.bg_color = (oc_color){ 10.0f/255.0f, 31.0f/255.0f, 72.0f/255.0f, 1 };
 	game.menu_bg_color = (oc_color){ 12.0f/255.0f, 41.0f/255.0f, 80.0f/255.0f, 1 };
 	game.menu_card_backs_margin = 25;
+
+	game.timer = 0;
+	set_timer_string(game.timer);
 
 	oc_vec2 viewport_size = { 1000, 775 };
 	set_sizes_based_on_viewport(viewport_size.x, viewport_size.y);
@@ -1362,6 +1397,8 @@ ORCA_EXPORT void oc_on_frame_refresh(void) {
     f64 timestamp = oc_clock_time(OC_CLOCK_DATE);
 	game.dt = timestamp - game.last_timestamp;
 	game.last_timestamp = timestamp;
+	game.timer += game.dt;
+	set_timer_string(game.timer);
 
 	solitaire_menu();
 	solitaire_update();

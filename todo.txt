@@ -1,27 +1,25 @@
-
-
-
-
 TODO:
-[ ] make all menu buttons full width of the menu (if not possible add to orca
-    wishlist)
-[ ] animate drawing from stock to waste?
-[X] make a menu
-	[ ] describe controls
-	[X] switch between draw 1 and draw 3 modes
-	[X] change what how to play displays based on game mode
-	[X] show rules
-	[X] new game
-	[X] choose card back
+[ ] scoring
+[ ] undo system
 [ ] shift+alt+2 to trigger win animation
 [ ] add some sound
 [ ] on tableau when dropping a card, if it overlaps both a pile and an empty
     slot and can go in both, prefer the pile
 
 DONE:
+[X] timer
+[X] make all menu buttons full width of the menu (if not possible add to orca
+    wishlist)
+[X] animate drawing from stock to waste
 [X] draw 3 mode
 	[X] clicking the stock will deal 3 cards to the waste pile
 	[X] only kings can go in an empty tableau pile
+[X] make a menu
+	[X] switch between draw 1 and draw 3 modes
+	[X] change what how to play displays based on game mode
+	[X] show rules
+	[X] new game
+	[X] choose card back
 [X] restart button (maybe, we already have r key to restart)
 [X] bug: right clicking a face down ace on top of the stock transfers it to
     foundation face down

@@ -97,8 +97,8 @@ typedef struct {
 	Input input;
 	oc_vec2 mouse_pos_on_mouse_right_down;
 
-	f64 last_timestamp;
-	f64 dt;
+	f64 dt, last_timestamp, timer;
+	char timer_string[9]; // 00:00:00
 	f32 deal_speed;
 	f32 card_animate_speed;
 
