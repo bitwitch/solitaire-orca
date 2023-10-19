@@ -46,6 +46,12 @@ typedef enum {
 typedef struct {
 	Suit suit;
 	CardKind kind;
+	oc_vec2 pos;
+} CardPath;
+
+typedef struct {
+	Suit suit;
+	CardKind kind;
 	Pile *pile;
 	oc_vec2 pos;
 	oc_vec2 vel; // for win animation
@@ -116,6 +122,8 @@ typedef struct {
 	f32 transition_to_win_delay;
 	i32 win_foundation_index;
 	Card *win_moving_card;
+	CardPath win_card_path[10000];
+	i32 win_card_path_index;
 
 	oc_vec2 frame_size;
 	oc_vec2 board_margin;
