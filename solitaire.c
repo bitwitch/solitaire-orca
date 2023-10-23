@@ -107,11 +107,26 @@ static bool point_in_card_bounds(f32 x, f32 y, Card *card) {
 static void set_sizes_based_on_viewport(u32 width, u32 height) {
     game.frame_size.x = width;
     game.frame_size.y = height;
-	game.board_margin.x = 50;
+
 	game.board_margin.y = 50;
-	game.card_width = ((f32)width * 0.75f) / 7.0f;
+	game.board_margin.x = 50;
+
+	if (game.frame_size.x > 2400) {
+		game.board_margin.x = (u32)(0.25f * width);
+	} else if (game.frame_size.x > 1900) {
+		game.board_margin.x = (u32)(0.21f * width);
+	} else if (game.frame_size.x > 1600) {
+		game.board_margin.x = (u32)(0.17f * width);
+	} else if (game.frame_size.x > 1200) {
+		game.board_margin.x = (u32)(0.10f * width);
+	}
+
+	f32 usable_width = width - (2.0f * game.board_margin.x);
+	f32 pct_card_margin = 0.18;
+
+	game.card_width = ((f32)usable_width * (1.0f - pct_card_margin)) / 7.0f;
 	game.card_height = (f32)game.card_width / CARD_ASPECT;
-	game.card_margin_x = (((f32)width * 0.25f) - (2.0f * (f32)game.board_margin.x)) / (ARRAY_COUNT(game.tableau) - 1);
+	game.card_margin_x = ((f32)usable_width * pct_card_margin) / (ARRAY_COUNT(game.tableau) - 1);
 	game.tableau_margin_top = 25;
 
 	game.stock.pos.x = game.board_margin.x;
