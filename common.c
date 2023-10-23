@@ -86,7 +86,6 @@ typedef enum {
 	STATE_SHOW_RULES,
 	STATE_SELECT_CARD_BACK,
 	STATE_AUTOCOMPLETE,
-	STATE_TRANSITION_TO_WIN,
 	STATE_WIN,
 } StateKind;
 
@@ -118,8 +117,6 @@ typedef struct {
 	i32 menu_card_backs_margin;
 	oc_ui_box *menu_card_backs_draw_box;
 
-	f32 transition_to_win_countdown;
-	f32 transition_to_win_delay;
 	i32 win_foundation_index;
 	Card *win_moving_card;
 	CardPath win_card_path[10000];

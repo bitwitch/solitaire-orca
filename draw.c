@@ -207,15 +207,6 @@ static void solitaire_draw(void) {
 		draw_select_card_back();
 		break;
 
-	// TODO(shaw): remove this state now that im not using the 
-	// dont-clear-framebuffer approach
-	// case STATE_TRANSITION_TO_WIN:
-		// draw_tableau();
-		// draw_foundations();
-		// oc_ui_draw();
-		// break;
-
-	case STATE_TRANSITION_TO_WIN:
 	case STATE_WIN: {
 		draw_stock();
 		draw_tableau();

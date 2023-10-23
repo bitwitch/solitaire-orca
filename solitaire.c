@@ -440,7 +440,6 @@ static void game_reset(void) {
 	game.timer = 0;
 	set_timer_string(game.timer);
 
-	game.transition_to_win_countdown = game.transition_to_win_delay;
 	game.win_foundation_index = 0;
 	game.win_moving_card = NULL;
 	game.win_card_path_index = 0;
@@ -752,16 +751,6 @@ static bool step_cards_towards_target(f32 rate) {
 	return any_card_moved;
 }
 
-// TODO(shaw): remove this state now that im not using the 
-// dont-clear-framebuffer approach
-static void solitaire_update_transition_to_win(void) {
-	if (game.transition_to_win_countdown <= 0) {
-		game.state = STATE_WIN;
-	} else {
-		game.transition_to_win_countdown -= game.dt;
-	}
-}
-
 static inline void append_win_card_path(Card *card) {
 	if (game.win_card_path_index < ARRAY_COUNT(game.win_card_path)) {
 		game.win_card_path[game.win_card_path_index++] = (CardPath){
@@ -842,7 +831,7 @@ static void solitaire_update_autocomplete(void) {
 	bool any_card_moved = step_cards_towards_target(game.deal_speed);
 
 	if (tableau_empty && !any_card_moved) {
-		game.state = STATE_TRANSITION_TO_WIN;
+		game.state = STATE_WIN;
 	}
 }
 
@@ -984,7 +973,7 @@ static void solitaire_update_play(void) {
 				}
 
 				if (is_game_won()) {
-					game.state = STATE_TRANSITION_TO_WIN;
+					game.state = STATE_WIN;
 				}
 			} else {
 				// return cards to previous position
@@ -1060,9 +1049,6 @@ static void solitaire_update(void) {
 		break;
 	case STATE_AUTOCOMPLETE:
 		solitaire_update_autocomplete();
-		break;
-	case STATE_TRANSITION_TO_WIN:
-		solitaire_update_transition_to_win();
 		break;
 	case STATE_WIN:
 		solitaire_update_win();
@@ -1318,9 +1304,6 @@ ORCA_EXPORT void oc_on_init(void) {
 	}
 
     game.last_timestamp = oc_clock_time(OC_CLOCK_DATE);
-
-	game.transition_to_win_delay = 0.01;
-	game.transition_to_win_countdown = game.transition_to_win_delay;
 
 	game.deal_countdown = 0;
 	game.deal_delay = 0.1;
