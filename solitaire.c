@@ -438,10 +438,7 @@ static void game_reset(void) {
 	game.deal_tableau_remaining = ARRAY_COUNT(game.tableau);
 	game.deal_cards_remaining = 28; // 7+6+5+4+3+2+1
 
-	// deal_klondike(game.cards, ARRAY_COUNT(game.cards));
-
-	game.state = STATE_PLAY;
-	test_deal_for_autocomplete(game.cards, ARRAY_COUNT(game.cards));
+	deal_klondike(game.cards, ARRAY_COUNT(game.cards));
 }
 
 static Pile *get_hovered_pile(void) {
