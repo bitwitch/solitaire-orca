@@ -443,6 +443,7 @@ static void game_reset(void) {
 	game.transition_to_win_countdown = game.transition_to_win_delay;
 	game.win_foundation_index = 0;
 	game.win_moving_card = NULL;
+	game.win_card_path_index = 0;
 
 	game.deal_countdown = 0;
 	game.deal_tableau_index = 0;
@@ -751,11 +752,26 @@ static bool step_cards_towards_target(f32 rate) {
 	return any_card_moved;
 }
 
+// TODO(shaw): remove this state now that im not using the 
+// dont-clear-framebuffer approach
 static void solitaire_update_transition_to_win(void) {
 	if (game.transition_to_win_countdown <= 0) {
 		game.state = STATE_WIN;
 	} else {
 		game.transition_to_win_countdown -= game.dt;
+	}
+}
+
+static inline void append_win_card_path(Card *card) {
+	if (game.win_card_path_index < ARRAY_COUNT(game.win_card_path)) {
+		game.win_card_path[game.win_card_path_index++] = (CardPath){
+			.suit = card->suit,	
+			.kind = card->kind,	
+			.pos = card->pos,
+		};
+	} else {
+		oc_log_error("too many card positions in win_card_path: %d\n", game.win_card_path_index);
+		game.win_card_path_index = 0;
 	}
 }
 
@@ -782,10 +798,13 @@ static void solitaire_update_win(void) {
 		card->vel.y += GRAVITY * game.dt;
 		card->pos.x += card->vel.x * game.dt;
 		card->pos.y += card->vel.y * game.dt;
-		if (card->vel.y > 0 && card->pos.y + game.card_height >= game.frame_size.y) {
-			card->vel.y *= -0.88f;
+		if (card->pos.y + game.card_height >= game.frame_size.y) {
+			card->pos.y = game.frame_size.y - game.card_height;
+			if (card->vel.y > 0) {
+				card->vel.y *= -0.88f;
+			} 
 		}
-		// card->target_pos = card->pos;
+		append_win_card_path(card);
 	}
 }
 

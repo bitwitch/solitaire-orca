@@ -175,15 +175,22 @@ static void draw_select_card_back(void) {
 	}	
 }
 
+static void draw_win_card_path(void) {
+	for (i32 i=0; i<game.win_card_path_index; ++i) {
+		CardPath path = game.win_card_path[i];
+		oc_rect dest = { path.pos.x, path.pos.y, game.card_width, game.card_height };
+		oc_image_draw_region(game.spritesheet, game.card_sprite_rects[path.suit][path.kind], dest);
+	}
+}
+
 static void solitaire_draw(void) {
     oc_canvas_select(game.canvas);
 	oc_surface_select(game.surface);
+	oc_set_color(game.bg_color);
+	oc_clear();
 
 	switch (game.state) {
 	case STATE_SHOW_RULES: {
-		oc_set_should_clear(true);
-		oc_set_color(game.bg_color);
-		oc_clear();
 		oc_rect dest = {0, 0, game.frame_size.x, game.frame_size.y};
 		oc_image rules_image = game.draw_three_mode ? game.rules_images[1] : game.rules_images[0];
 		oc_image_draw(rules_image, dest);
@@ -192,9 +199,6 @@ static void solitaire_draw(void) {
 	}
 
 	case STATE_SELECT_CARD_BACK:
-		oc_set_should_clear(true);
-		oc_set_color(game.bg_color);
-		oc_clear();
 		draw_stock();
 		draw_waste();
 		draw_tableau();
@@ -203,17 +207,20 @@ static void solitaire_draw(void) {
 		draw_select_card_back();
 		break;
 
+	// TODO(shaw): remove this state now that im not using the 
+	// dont-clear-framebuffer approach
+	// case STATE_TRANSITION_TO_WIN:
+		// draw_tableau();
+		// draw_foundations();
+		// oc_ui_draw();
+		// break;
+
 	case STATE_TRANSITION_TO_WIN:
-		oc_set_should_clear(true);
-		oc_set_color(game.bg_color);
-		oc_clear();
+	case STATE_WIN: {
+		draw_stock();
 		draw_tableau();
 		draw_foundations();
-		oc_ui_draw();
-		break;
-
-	case STATE_WIN: {
-		oc_set_should_clear(false);
+		draw_win_card_path();
 		Card *card = game.win_moving_card;
 		if (card) {
 			oc_rect dest = { card->pos.x, card->pos.y, game.card_width, game.card_height };
@@ -224,9 +231,6 @@ static void solitaire_draw(void) {
 	}
 		
 	default:
-		oc_set_should_clear(true);
-		oc_set_color(game.bg_color);
-		oc_clear();
 		draw_stock();
 		draw_waste();
 		draw_tableau();
