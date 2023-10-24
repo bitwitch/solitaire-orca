@@ -5,6 +5,15 @@ functions where a "move" is made:
 - auto_tranfer_card_to_foundation()
 - maybe_drop_dragged_card()
 
+Scoring:
+Waste to Tableau 	                     5
+Waste to Foundation 	                10
+Tableau to Foundation 	              10
+Turn over Tableau card 	               5
+Foundation to Tableau 	             −15
+Recycle waste when playing by ones 	−100 (minimum score is 0)
+Undo                                 -25 (and undo any scoring from the move)
+
 
 TODO:
 [ ] scoring

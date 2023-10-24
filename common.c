@@ -79,12 +79,44 @@ typedef struct {
 	DigitalInput num1, num2, num3, num4, num5, num6, num7, num8, num9, num0;
 } Input;
 
+typedef enum {
+	UNDO_NONE,
+	UNDO_SCORE_CHANGE,
+	UNDO_PILE_TRANSFER,
+	UNDO_COMMIT_MARKER,
+} UndoKind;
+
 typedef struct {
-	bool commit_marker;
-	Pile *prev_pile;
-	Card *card, *parent;
-	bool was_face_up, was_parent_face_up;
+	UndoKind kind;
+	union {
+		struct {
+			Pile *prev_pile;
+			Card *card, *parent;
+			bool was_face_up, was_parent_face_up;
+		};
+		i32 score_change;
+	};
 } UndoInfo;
+
+typedef enum {
+	SCORE_NONE,
+	SCORE_RESET,
+	SCORE_PILE_TRANSFER,
+	SCORE_REVEAL_TABLEAU,
+	SCORE_RECYCLE_WASTE,
+	SCORE_UNDO,
+} ScoreKind;
+
+typedef struct {
+	ScoreKind kind;
+	union {
+		struct {
+			Pile *from_pile;
+			Pile *to_pile;
+		};
+		i32 score_change;
+	};
+} UpdateScoreParams;
 
 typedef enum {
 	STATE_NONE,
@@ -133,6 +165,9 @@ typedef struct {
 	i32 move_count;
 	i32 undo_count;
 	char moves_string[12]; // Moves: 0000
+
+	i32 score;
+	char score_string[14]; // Score: 000000
 
 	oc_vec2 frame_size;
 	oc_vec2 board_margin;

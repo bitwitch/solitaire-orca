@@ -324,6 +324,77 @@ static void position_all_cards_on_pile(Pile *pile, bool instant) {
 	}
 }
 
+
+static void pile_transfer(Pile *target_pile, Card *card, bool instant);
+
+static void undo_push_pile_transfer(Card *card) {
+	assert(game.temp_undo_stack_index < ARRAY_COUNT(game.temp_undo_stack));
+	Card *parent = oc_list_next_entry(card->pile->cards, card, Card, node);
+	UndoInfo move = {
+		.kind = UNDO_PILE_TRANSFER,
+		.prev_pile = card->pile,
+		.card = card, 
+		.was_face_up = card->face_up,
+		.parent = parent,
+		.was_parent_face_up = parent && parent->face_up,
+	};
+	game.temp_undo_stack[game.temp_undo_stack_index++] = move;
+}
+
+static void undo_push_score_change(i32 score_change) {
+	assert(game.temp_undo_stack_index < ARRAY_COUNT(game.temp_undo_stack));
+	UndoInfo move = {
+		.kind = UNDO_SCORE_CHANGE,
+		.score_change = score_change,
+	};
+	game.temp_undo_stack[game.temp_undo_stack_index++] = move;
+}
+
+static void update_score(UpdateScoreParams params) {
+	switch (params.kind) {
+	case SCORE_RESET:
+		game.score = 0;
+		break;
+	case SCORE_PILE_TRANSFER: {
+		assert(params.from_pile);
+		assert(params.to_pile);
+		PileKind from_kind = params.from_pile->kind;
+		PileKind to_kind = params.to_pile->kind;
+		i32 score_change = 0;
+		if (from_kind == PILE_WASTE && to_kind == PILE_TABLEAU) {
+			score_change = 5;
+		} else if (from_kind == PILE_WASTE && to_kind == PILE_FOUNDATION) {
+			score_change = 10;
+		} else if (from_kind == PILE_TABLEAU && to_kind == PILE_FOUNDATION) {
+			score_change = 10;
+		} else if (from_kind == PILE_FOUNDATION && to_kind == PILE_TABLEAU) {
+			score_change = -15;
+		}
+		undo_push_score_change(score_change);
+		game.score += score_change;
+		break;
+	}
+	case SCORE_REVEAL_TABLEAU:
+		undo_push_score_change(5);
+		game.score += 5;
+		break;
+	case SCORE_RECYCLE_WASTE:
+		if (!game.draw_three_mode) {
+			undo_push_score_change(-100);
+			game.score -= 100;
+		}
+		break;
+	case SCORE_UNDO:
+		game.score -= params.score_change;
+		break;
+	default: 
+		assert(0);
+		break;
+	}
+	if (game.score < 0) game.score = 0;
+	snprintf(game.score_string, sizeof(game.score_string), "Score: %d", game.score);
+}
+
 static Card *pile_pop(Pile *pile) {
 	Card *card = oc_list_pop_entry(&pile->cards, Card, node);
 	if (card) card->pile = NULL;
@@ -339,8 +410,6 @@ static void pile_push(Pile *pile, Card *card, bool instant) {
 	card->pile = pile;
 	oc_list_push(&pile->cards, &card->node);
 }
-
-static void undo_push(Card *card);
 
 // this is basically moving a sublist from one list to another
 // rather than a single element 
@@ -385,24 +454,12 @@ static void update_moves_string(void) {
 	snprintf(game.moves_string, sizeof(game.moves_string), "Moves: %d", total_moves);
 }
 
-static void undo_push(Card *card) {
-	assert(game.temp_undo_stack_index < ARRAY_COUNT(game.temp_undo_stack));
-	Card *parent = oc_list_next_entry(card->pile->cards, card, Card, node);
-	UndoInfo move = {
-		.commit_marker = false,
-		.prev_pile = card->pile,
-		.card = card, 
-		.was_face_up = card->face_up,
-		.parent = parent,
-		.was_parent_face_up = parent && parent->face_up,
-	};
-	game.temp_undo_stack[game.temp_undo_stack_index++] = move;
-}
+
 
 static void undo_commit(void) {
 	if (game.temp_undo_stack_index > 0) {
 		assert(game.undo_stack_index + game.temp_undo_stack_index + 1 < ARRAY_COUNT(game.undo_stack));
-		game.undo_stack[game.undo_stack_index++] = (UndoInfo){.commit_marker = true};
+		game.undo_stack[game.undo_stack_index++] = (UndoInfo){.kind = UNDO_COMMIT_MARKER};
 		for (i32 i=0; i<game.temp_undo_stack_index; ++i) {
 			UndoInfo move = game.temp_undo_stack[i];
 			game.undo_stack[game.undo_stack_index++] = move;
@@ -422,18 +479,31 @@ static void commit_move(void) {
 static void undo_move(void) {
 	if (game.undo_stack_index > 0) {
 		bool cleanup_waste = false;
-		UndoInfo move = game.undo_stack[--game.undo_stack_index];
-		while (!move.commit_marker) {
+		UndoInfo undo = game.undo_stack[--game.undo_stack_index];
+		while (undo.kind != UNDO_COMMIT_MARKER) {
 			assert(game.undo_stack_index > 0);
-			if (move.card->pile->kind == PILE_WASTE) {
-				cleanup_waste = true;
+			switch (undo.kind) {
+			case UNDO_PILE_TRANSFER: {
+				if (undo.card->pile->kind == PILE_WASTE) {
+				 cleanup_waste = true;
+				}
+				if (undo.parent) {
+				 undo.parent->face_up = undo.was_parent_face_up;
+				}
+				pile_transfer(undo.prev_pile, undo.card, true);
+				undo.card->face_up = undo.was_face_up;
+				break;
 			}
-			if (move.parent) {
-				move.parent->face_up = move.was_parent_face_up;
+			case UNDO_SCORE_CHANGE: {
+				UpdateScoreParams params = { .kind = SCORE_UNDO, .score_change = undo.score_change };
+				update_score(params);
+				break;
 			}
-			pile_transfer(move.prev_pile, move.card, true);
-			move.card->face_up = move.was_face_up;
-			move = game.undo_stack[--game.undo_stack_index];
+			default:
+				assert(0);
+				break;
+			}
+			undo = game.undo_stack[--game.undo_stack_index];
 		}
 		
 		if (cleanup_waste) {
@@ -557,6 +627,9 @@ static void game_reset(void) {
 	game.move_count = 0;
 	game.undo_count = 0;
 	update_moves_string();
+
+	UpdateScoreParams params = { .kind = SCORE_RESET };
+	update_score(params);
 
 	game.deal_countdown = 0;
 	game.deal_tableau_index = 0;
@@ -753,7 +826,12 @@ static bool maybe_drop_dragged_card(void) {
 	for (i32 i=0; i<ARRAY_COUNT(game.foundations); ++i) {
 		Pile *pile = &game.foundations[i]; 
 		if (can_drop_card_on_pile(pile, drag_card)) {
-			undo_push(drag_card);
+			UpdateScoreParams params = { 
+				.kind = SCORE_PILE_TRANSFER, 
+				.from_pile = drag_card->pile, 
+				.to_pile = pile};
+			update_score(params);
+			undo_push_pile_transfer(drag_card);
 			pile_transfer(pile, drag_card, true);
 			return true;
 		}
@@ -763,7 +841,12 @@ static bool maybe_drop_dragged_card(void) {
 	for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
 		Pile *pile = &game.tableau[i];
 		if (can_drop_card_on_pile(pile, drag_card)) {
-			undo_push(drag_card);
+			UpdateScoreParams params = { 
+				.kind = SCORE_PILE_TRANSFER, 
+				.from_pile = drag_card->pile, 
+				.to_pile = pile};
+			update_score(params);
+			undo_push_pile_transfer(drag_card);
 			pile_transfer(pile, drag_card, true);
 			return true;
 		}
@@ -832,7 +915,12 @@ static bool auto_transfer_card_to_foundation(Card *card) {
 		}
 
 		if (auto_transfer) {
-			undo_push(card);
+			UpdateScoreParams params = { 
+				.kind = SCORE_PILE_TRANSFER, 
+				.from_pile = card->pile, 
+				.to_pile = &game.foundations[i] };
+			update_score(params);
+			undo_push_pile_transfer(card);
 			pile_transfer(&game.foundations[i], card, true);
 			return true;
 		}
@@ -847,6 +935,8 @@ static void reveal_tableau_card(void) {
 		Card *top = pile_peek_top(&game.tableau[i]);
 		if (top && !top->face_up) {
 			top->face_up = true;
+			UpdateScoreParams params = { .kind = SCORE_REVEAL_TABLEAU };
+			update_score(params);
 		}
 	}
 }
@@ -1047,7 +1137,7 @@ static void solitaire_update_play(void) {
 				for (i32 i=0; i<cards_to_transfer; ++i) {
 					Card *card = pile_peek_top(&game.stock);
 					if (card) {
-						undo_push(card);
+						undo_push_pile_transfer(card);
 						card->face_up = true;
 						pile_transfer(&game.waste, card, false);
 					}
@@ -1060,10 +1150,14 @@ static void solitaire_update_play(void) {
 				oc_rect stock_rect = { game.stock.pos.x, game.stock.pos.y, game.card_width, game.card_height };
 				if (point_in_rect(game.mouse_input.x, game.mouse_input.y, stock_rect)) {
 					Card *card = pile_peek_top(&game.waste);
+					if (card) {
+						UpdateScoreParams params = { .kind = SCORE_RECYCLE_WASTE };
+						update_score(params);
+					}
 					while (card) {
-						undo_push(card);
+						undo_push_pile_transfer(card);
 						card->face_up = false;
-						pile_transfer(&game.stock, card, true);
+						pile_transfer(&game.stock, card, false);
 						card = pile_peek_top(&game.waste);
 					}	
 				}
@@ -1355,7 +1449,7 @@ static void solitaire_menu(void) {
 				oc_ui_menu_end();
 			}
 
-			// TIMER
+			// Score and Timer
 			oc_ui_style_next(&(oc_ui_style){ 
 				.size.width = { OC_UI_SIZE_PARENT, 1, 1},
 				.size.height = { OC_UI_SIZE_PARENT, 1, 1 },
@@ -1372,8 +1466,12 @@ static void solitaire_menu(void) {
 			oc_ui_container("menu bar end", OC_UI_FLAG_NONE)
 			{
 				oc_ui_style_next(&(oc_ui_style){ .layout.margin.x = 15 }, OC_UI_STYLE_LAYOUT_MARGIN_X);
+				oc_ui_label(game.score_string);
+
+				oc_ui_style_next(&(oc_ui_style){ .layout.margin.x = 15 }, OC_UI_STYLE_LAYOUT_MARGIN_X);
 				oc_ui_label(game.moves_string);
 
+				oc_ui_style_next(&(oc_ui_style){ .layout.margin.x = 15 }, OC_UI_STYLE_LAYOUT_MARGIN_X);
 				oc_ui_label(game.timer_string);
 			}
 		}
@@ -1416,6 +1514,9 @@ ORCA_EXPORT void oc_on_init(void) {
 	update_timer_string(game.timer);
 
 	update_moves_string();
+
+	UpdateScoreParams params = { .kind = SCORE_RESET };
+	update_score(params);
 
 	oc_vec2 viewport_size = { 1000, 775 };
 	set_sizes_based_on_viewport(viewport_size.x, viewport_size.y);
