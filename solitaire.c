@@ -178,6 +178,36 @@ static void load_images(void) {
 
 static Card *pile_peek_top(Pile *pile);
 
+// positions the second and third cards from the top of the waste pile, and
+// returns the new position for the top card
+static oc_vec2 position_second_and_third_cards_on_waste(Card *second, Card *third, bool instant) {
+	Pile *pile = &game.waste;
+	oc_vec2 new_pos = pile->pos;
+	if (game.draw_three_mode) {
+		i32 x_offset = 0.22f * game.card_width;
+		if (second) {
+			Card *third = oc_list_next_entry(game.waste.cards, second, Card, node);
+			if (third) {
+				third->target_pos = pile->pos;
+				i32 new_x = third->target_pos.x + x_offset;
+				second->target_pos.x = new_x;
+				if (instant) {
+					third->pos = pile->pos;
+					second->pos.x = new_x;
+				}
+			} else {
+				second->target_pos = pile->pos;
+				if (instant) {
+					second->pos = pile->pos;
+				}
+			}
+			new_pos.x = second->target_pos.x + x_offset;
+			new_pos.y = second->target_pos.y;
+		}
+	}
+	return new_pos;
+}
+
 static void position_card_on_top_of_pile(Card *card, Pile *pile, bool instant) {
 	assert(card);
 	assert(pile);
@@ -196,33 +226,9 @@ static void position_card_on_top_of_pile(Card *card, Pile *pile, bool instant) {
 	}
 
 	case PILE_WASTE: {
-		if (game.draw_three_mode) {
-			i32 x_offset = 0.22f * game.card_width;
-			Card *top = pile_peek_top(&game.waste);
-			if (top) {
-				Card *second_from_top = oc_list_next_entry(game.waste.cards, top, Card, node);
-				if (second_from_top) {
-					second_from_top->target_pos = pile->pos;
-					i32 new_x = second_from_top->target_pos.x + x_offset;
-					top->target_pos.x = new_x;
-					if (instant) {
-						second_from_top->pos = pile->pos;
-						top->pos.x = new_x;
-					}
-				} else {
-					top->target_pos = pile->pos;
-					if (instant) {
-						top->pos = pile->pos;
-					}
-				}
-				new_pos.x = top->target_pos.x + x_offset;
-				new_pos.y = top->target_pos.y;
-			} else {
-				new_pos = pile->pos;
-			}
-		} else {
-			new_pos = pile->pos;
-		}
+		Card *second = pile_peek_top(&game.waste);
+		Card *third = second ? oc_list_next_entry(game.waste.cards, second, Card, node) : NULL;
+		new_pos = position_second_and_third_cards_on_waste(second, third, instant);
 		break;
 	}
 
@@ -256,7 +262,6 @@ static void position_card_on_top_of_pile(Card *card, Pile *pile, bool instant) {
 
 static void position_all_cards_on_pile(Pile *pile, bool instant) {
 	switch (pile->kind) {
-	case PILE_WASTE:
 	case PILE_FOUNDATION: {
 		oc_list_for_reverse(pile->cards, card, Card, node) {
 			card->target_pos = pile->pos;
@@ -266,6 +271,27 @@ static void position_all_cards_on_pile(Pile *pile, bool instant) {
 		}
 		break;
 	}
+
+	case PILE_WASTE: {
+		oc_list_for_reverse(pile->cards, card, Card, node) {
+			if (game.draw_three_mode && card == oc_list_first_entry(pile->cards, Card, node)) {
+				Card *second = oc_list_next_entry(pile->cards, card, Card, node);
+				Card *third = second ? oc_list_next_entry(pile->cards, second, Card, node) : NULL;
+				oc_vec2 new_pos = position_second_and_third_cards_on_waste(second, third, instant);
+				card->target_pos = new_pos;
+				if (instant) {
+					card->pos = new_pos;
+				}
+			} else {
+				card->target_pos = pile->pos;
+				if (instant) {
+					card->pos = card->target_pos;
+				}
+			}
+		}
+		break;
+	}
+
 	case PILE_STOCK: {
 		f32 offset = 0;
 		oc_list_for_reverse(pile->cards, card, Card, node) {
@@ -314,6 +340,8 @@ static void pile_push(Pile *pile, Card *card, bool instant) {
 	oc_list_push(&pile->cards, &card->node);
 }
 
+static void undo_push(Card *card);
+
 // this is basically moving a sublist from one list to another
 // rather than a single element 
 static void pile_transfer(Pile *target_pile, Card *card, bool instant) {
@@ -348,6 +376,57 @@ static void pile_transfer(Pile *target_pile, Card *card, bool instant) {
 		position_card_on_top_of_pile(current, target_pile, instant);
 		current->pile = target_pile;
 		target_pile->cards.first = node;
+	}
+}
+
+static void undo_push(Card *card) {
+	assert(game.temp_undo_stack_index < ARRAY_COUNT(game.temp_undo_stack));
+	Card *parent = oc_list_next_entry(card->pile->cards, card, Card, node);
+	UndoInfo move = {
+		.commit_marker = false,
+		.prev_pile = card->pile,
+		.card = card, 
+		.was_face_up = card->face_up,
+		.parent = parent,
+		.was_parent_face_up = parent && parent->face_up,
+	};
+	game.temp_undo_stack[game.temp_undo_stack_index++] = move;
+}
+
+static void undo_commit(void) {
+	if (game.temp_undo_stack_index > 0) {
+		assert(game.undo_stack_index + game.temp_undo_stack_index + 1 < ARRAY_COUNT(game.undo_stack));
+		game.undo_stack[game.undo_stack_index++] = (UndoInfo){.commit_marker = true};
+		for (i32 i=0; i<game.temp_undo_stack_index; ++i) {
+			UndoInfo move = game.temp_undo_stack[i];
+			game.undo_stack[game.undo_stack_index++] = move;
+		}
+		game.temp_undo_stack_index = 0;
+	}
+}
+
+static void undo_move(void) {
+	if (game.undo_stack_index > 0) {
+		bool cleanup_waste = false;
+		UndoInfo move = game.undo_stack[--game.undo_stack_index];
+		while (!move.commit_marker) {
+			assert(game.undo_stack_index > 0);
+			if (move.card->pile->kind == PILE_WASTE) {
+				cleanup_waste = true;
+			}
+			if (move.parent) {
+				move.parent->face_up = move.was_parent_face_up;
+			}
+			pile_transfer(move.prev_pile, move.card, true);
+			move.card->face_up = move.was_face_up;
+			move = game.undo_stack[--game.undo_stack_index];
+		}
+		
+		if (cleanup_waste) {
+			position_all_cards_on_pile(&game.waste, false);
+		}
+
+		++game.undo_count;
 	}
 }
 
@@ -458,6 +537,10 @@ static void game_reset(void) {
 	game.win_foundation_index = 0;
 	game.win_moving_card = NULL;
 	game.win_card_path_index = 0;
+
+	game.undo_stack_index = 0;
+	game.move_count = 0;
+	game.undo_count = 0;
 
 	game.deal_countdown = 0;
 	game.deal_tableau_index = 0;
@@ -654,7 +737,9 @@ static bool maybe_drop_dragged_card(void) {
 	for (i32 i=0; i<ARRAY_COUNT(game.foundations); ++i) {
 		Pile *pile = &game.foundations[i]; 
 		if (can_drop_card_on_pile(pile, drag_card)) {
+			undo_push(drag_card);
 			pile_transfer(pile, drag_card, true);
+			++game.move_count;
 			return true;
 		}
 	}
@@ -663,7 +748,9 @@ static bool maybe_drop_dragged_card(void) {
 	for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
 		Pile *pile = &game.tableau[i];
 		if (can_drop_card_on_pile(pile, drag_card)) {
+			undo_push(drag_card);
 			pile_transfer(pile, drag_card, true);
+			++game.move_count;
 			return true;
 		}
 	}
@@ -731,7 +818,9 @@ static bool auto_transfer_card_to_foundation(Card *card) {
 		}
 
 		if (auto_transfer) {
+			undo_push(card);
 			pile_transfer(&game.foundations[i], card, true);
+			++game.move_count;
 			return true;
 		}
 	}
@@ -941,10 +1030,14 @@ static void solitaire_update_play(void) {
 
 			// if stock clicked, move cards to waste
 			if (hovered_card == oc_list_first_entry(game.stock.cards, Card, node)) {
+				if (!oc_list_empty(game.stock.cards)) {
+					++game.move_count;
+				}
 				i32 cards_to_transfer = game.draw_three_mode ? 3 : 1;
 				for (i32 i=0; i<cards_to_transfer; ++i) {
 					Card *card = pile_peek_top(&game.stock);
 					if (card) {
+						undo_push(card);
 						card->face_up = true;
 						pile_transfer(&game.waste, card, false);
 					}
@@ -957,7 +1050,11 @@ static void solitaire_update_play(void) {
 				oc_rect stock_rect = { game.stock.pos.x, game.stock.pos.y, game.card_width, game.card_height };
 				if (point_in_rect(game.mouse_input.x, game.mouse_input.y, stock_rect)) {
 					Card *card = pile_peek_top(&game.waste);
+					if (card) {
+						++game.move_count;
+					}
 					while (card) {
+						undo_push(card);
 						card->face_up = false;
 						pile_transfer(&game.stock, card, true);
 						card = pile_peek_top(&game.waste);
@@ -1015,6 +1112,8 @@ static void solitaire_update_play(void) {
 				}
 			}
 		}
+	} else if (pressed(game.input.u)) {
+		undo_move();
 	}
 
 	// move cards being dragged
@@ -1028,6 +1127,8 @@ static void solitaire_update_play(void) {
 			card->pos = card->target_pos; 
 		}
 	}
+
+	undo_commit();
 }
 
 
@@ -1035,6 +1136,7 @@ static void end_frame_input(void) {
 	game.mouse_input.left.was_down = game.mouse_input.left.down;
 	game.mouse_input.right.was_down = game.mouse_input.right.down;
 	game.input.r.was_down = game.input.r.down;
+	game.input.u.was_down = game.input.u.down;
 	game.input.num1.was_down = game.input.num1.down;
 	game.input.num2.was_down = game.input.num2.down;
 	game.input.num3.was_down = game.input.num3.down;
@@ -1349,6 +1451,7 @@ ORCA_EXPORT void oc_on_resize(u32 width, u32 height) {
 ORCA_EXPORT void oc_on_key_down(oc_scan_code scan, oc_key_code key) {
 	switch (key) {
 	case OC_KEY_R: game.input.r.down = true;    break;
+	case OC_KEY_U: game.input.u.down = true;    break;
 	case OC_KEY_1: game.input.num1.down = true; break;
 	case OC_KEY_2: game.input.num2.down = true; break;
 	case OC_KEY_3: game.input.num3.down = true; break;
@@ -1368,6 +1471,7 @@ ORCA_EXPORT void oc_on_key_down(oc_scan_code scan, oc_key_code key) {
 ORCA_EXPORT void oc_on_key_up(oc_scan_code scan, oc_key_code key) {
 	switch (key) {
 	case OC_KEY_R: game.input.r.down = false;    break;
+	case OC_KEY_U: game.input.u.down = false;    break;
 	case OC_KEY_1: game.input.num1.down = false; break;
 	case OC_KEY_2: game.input.num2.down = false; break;
 	case OC_KEY_3: game.input.num3.down = false; break;

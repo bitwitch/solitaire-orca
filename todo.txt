@@ -1,12 +1,22 @@
+Notes:
+functions where a "move" is made:
+- solitaire_update_play() // if stock clicked, move cards to waste
+- solitaire_update_play() // if empty stock clicked, move all waste to stock
+- auto_tranfer_card_to_foundation()
+- maybe_drop_dragged_card()
+
+
 TODO:
+[ ] show number of moves in menu bar maybe ???
 [ ] scoring
-[ ] undo system
 [ ] shift+alt+2 to trigger win animation
 [ ] add some sound
 [ ] on tableau when dropping a card, if it overlaps both a pile and an empty
-    slot and can go in both, prefer the pile
+    slot and can go in both, prefer the pile maybe ???
 
 DONE:
+[X] undo system
+	[X] calculate number of moves made
 [X] timer
 [X] make all menu buttons full width of the menu (if not possible add to orca
     wishlist)

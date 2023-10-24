@@ -75,9 +75,16 @@ typedef struct {
 } MouseInput;
 
 typedef struct {
-	DigitalInput r;
+	DigitalInput r, u;
 	DigitalInput num1, num2, num3, num4, num5, num6, num7, num8, num9, num0;
 } Input;
+
+typedef struct {
+	bool commit_marker;
+	Pile *prev_pile;
+	Card *card, *parent;
+	bool was_face_up, was_parent_face_up;
+} UndoInfo;
 
 typedef enum {
 	STATE_NONE,
@@ -119,8 +126,12 @@ typedef struct {
 
 	i32 win_foundation_index;
 	Card *win_moving_card;
-	CardPath win_card_path[10000];
 	i32 win_card_path_index;
+
+	i32 temp_undo_stack_index;
+	i32 undo_stack_index;
+	i32 move_count;
+	i32 undo_count;
 
 	oc_vec2 frame_size;
 	oc_vec2 board_margin;
@@ -136,9 +147,14 @@ typedef struct {
 	
 	oc_image spritesheet, reload_icon, rules_images[2], card_backs[10];
 	u32 selected_card_back;
+
 	oc_rect card_sprite_rects[SUIT_COUNT][CARD_KIND_COUNT]; 
 	Card cards[SUIT_COUNT*CARD_KIND_COUNT];
 
+	CardPath win_card_path[10000];
+
+	UndoInfo temp_undo_stack[64];
+	UndoInfo undo_stack[2048];
 } GameState;
 
 GameState game;
