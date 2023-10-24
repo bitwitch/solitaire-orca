@@ -379,6 +379,12 @@ static void pile_transfer(Pile *target_pile, Card *card, bool instant) {
 	}
 }
 
+static void update_moves_string(void) {
+	i32 total_moves = game.move_count + game.undo_count;
+	assert(total_moves <= 9999);
+	snprintf(game.moves_string, sizeof(game.moves_string), "Moves: %d", total_moves);
+}
+
 static void undo_push(Card *card) {
 	assert(game.temp_undo_stack_index < ARRAY_COUNT(game.temp_undo_stack));
 	Card *parent = oc_list_next_entry(card->pile->cards, card, Card, node);
@@ -405,6 +411,14 @@ static void undo_commit(void) {
 	}
 }
 
+static void commit_move(void) {
+	if (game.temp_undo_stack_index > 0) {
+		++game.move_count;
+		update_moves_string();
+	}
+	undo_commit();
+}
+
 static void undo_move(void) {
 	if (game.undo_stack_index > 0) {
 		bool cleanup_waste = false;
@@ -427,6 +441,7 @@ static void undo_move(void) {
 		}
 
 		++game.undo_count;
+		update_moves_string();
 	}
 }
 
@@ -509,7 +524,7 @@ static void deal_klondike(Card *cards, i32 num_cards) {
 	game.state = STATE_DEALING;
 }
 
-static void set_timer_string(f64 seconds_elapsed_f64) {
+static void update_timer_string(f64 seconds_elapsed_f64) {
 	u64 seconds_elapsed = (u64)seconds_elapsed_f64;
 	u64 seconds = seconds_elapsed % 60;
 	u64 minutes_elapsed = seconds_elapsed / 60;
@@ -532,7 +547,7 @@ static void game_reset(void) {
 	}
 
 	game.timer = 0;
-	set_timer_string(game.timer);
+	update_timer_string(game.timer);
 
 	game.win_foundation_index = 0;
 	game.win_moving_card = NULL;
@@ -541,6 +556,7 @@ static void game_reset(void) {
 	game.undo_stack_index = 0;
 	game.move_count = 0;
 	game.undo_count = 0;
+	update_moves_string();
 
 	game.deal_countdown = 0;
 	game.deal_tableau_index = 0;
@@ -739,7 +755,6 @@ static bool maybe_drop_dragged_card(void) {
 		if (can_drop_card_on_pile(pile, drag_card)) {
 			undo_push(drag_card);
 			pile_transfer(pile, drag_card, true);
-			++game.move_count;
 			return true;
 		}
 	}
@@ -750,7 +765,6 @@ static bool maybe_drop_dragged_card(void) {
 		if (can_drop_card_on_pile(pile, drag_card)) {
 			undo_push(drag_card);
 			pile_transfer(pile, drag_card, true);
-			++game.move_count;
 			return true;
 		}
 	}
@@ -820,7 +834,6 @@ static bool auto_transfer_card_to_foundation(Card *card) {
 		if (auto_transfer) {
 			undo_push(card);
 			pile_transfer(&game.foundations[i], card, true);
-			++game.move_count;
 			return true;
 		}
 	}
@@ -1030,9 +1043,6 @@ static void solitaire_update_play(void) {
 
 			// if stock clicked, move cards to waste
 			if (hovered_card == oc_list_first_entry(game.stock.cards, Card, node)) {
-				if (!oc_list_empty(game.stock.cards)) {
-					++game.move_count;
-				}
 				i32 cards_to_transfer = game.draw_three_mode ? 3 : 1;
 				for (i32 i=0; i<cards_to_transfer; ++i) {
 					Card *card = pile_peek_top(&game.stock);
@@ -1050,9 +1060,6 @@ static void solitaire_update_play(void) {
 				oc_rect stock_rect = { game.stock.pos.x, game.stock.pos.y, game.card_width, game.card_height };
 				if (point_in_rect(game.mouse_input.x, game.mouse_input.y, stock_rect)) {
 					Card *card = pile_peek_top(&game.waste);
-					if (card) {
-						++game.move_count;
-					}
 					while (card) {
 						undo_push(card);
 						card->face_up = false;
@@ -1128,7 +1135,7 @@ static void solitaire_update_play(void) {
 		}
 	}
 
-	undo_commit();
+	commit_move();
 }
 
 
@@ -1303,7 +1310,6 @@ static void do_card_back_menu(void) {
 	}
 }
 
-
 static void solitaire_menu(void) {
 	oc_ui_box *menu = NULL;
 
@@ -1363,8 +1369,11 @@ static void solitaire_menu(void) {
 				| OC_UI_STYLE_LAYOUT_ALIGN_Y
 				| OC_UI_STYLE_LAYOUT_MARGIN_X);
 
-			oc_ui_container("timer", OC_UI_FLAG_NONE)
+			oc_ui_container("menu bar end", OC_UI_FLAG_NONE)
 			{
+				oc_ui_style_next(&(oc_ui_style){ .layout.margin.x = 15 }, OC_UI_STYLE_LAYOUT_MARGIN_X);
+				oc_ui_label(game.moves_string);
+
 				oc_ui_label(game.timer_string);
 			}
 		}
@@ -1404,7 +1413,9 @@ ORCA_EXPORT void oc_on_init(void) {
 	game.menu_card_backs_margin = 25;
 
 	game.timer = 0;
-	set_timer_string(game.timer);
+	update_timer_string(game.timer);
+
+	update_moves_string();
 
 	oc_vec2 viewport_size = { 1000, 775 };
 	set_sizes_based_on_viewport(viewport_size.x, viewport_size.y);
@@ -1523,7 +1534,7 @@ ORCA_EXPORT void oc_on_frame_refresh(void) {
 	game.dt = timestamp - game.last_timestamp;
 	game.last_timestamp = timestamp;
 	game.timer += game.dt;
-	set_timer_string(game.timer);
+	update_timer_string(game.timer);
 
 	solitaire_menu();
 	solitaire_update();

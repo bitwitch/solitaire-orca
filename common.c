@@ -132,6 +132,7 @@ typedef struct {
 	i32 undo_stack_index;
 	i32 move_count;
 	i32 undo_count;
+	char moves_string[12]; // Moves: 0000
 
 	oc_vec2 frame_size;
 	oc_vec2 board_margin;
@@ -154,7 +155,7 @@ typedef struct {
 	CardPath win_card_path[10000];
 
 	UndoInfo temp_undo_stack[64];
-	UndoInfo undo_stack[2048];
+	UndoInfo undo_stack[4096];
 } GameState;
 
 GameState game;
