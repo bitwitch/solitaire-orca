@@ -1322,6 +1322,10 @@ static void solitaire_menu(void) {
 					game_reset();
 				}
 
+				if (oc_ui_menu_button_fixed_width("Undo", button_width).pressed) {
+					undo_move();
+				}
+
 				{ // game mode buttons: draw 1 or 3
 					const char *game_mode_text = game.draw_three_mode 
 						? "Switch Game Mode: Turn 1"
