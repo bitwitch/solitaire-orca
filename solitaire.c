@@ -1134,10 +1134,14 @@ static void solitaire_update_play(void) {
 		if (hovered_card) {
 			// start dragging card
 			if (can_drag(hovered_card)) {
+				bool card_in_motion = hovered_card->pos.x != hovered_card->target_pos.x || 
+				                      hovered_card->pos.y != hovered_card->target_pos.y;
 				// store pos and drag offset for all cards being dragged together
 				for (oc_list_elt *node = &hovered_card->node; node; node = node->prev) {
 					Card *card = oc_list_entry(node, Card, node);
-					card->pos_before_drag = card->pos;
+					if (!card_in_motion) {
+						card->pos_before_drag = card->pos;
+					}
 					card->drag_offset.x = game.mouse_input.x - card->pos.x;
 					card->drag_offset.y = game.mouse_input.y - card->pos.y;
 				}

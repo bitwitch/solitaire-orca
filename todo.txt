@@ -22,6 +22,8 @@ TODO:
     slot and can go in both, prefer the pile maybe ???
 
 DONE:
+[X] fix: clicking to drag a card that is in the middle of returning to its
+		previous position messes up its position
 [X] scoring
 [X] show number of moves in menu bar maybe
 [X] undo system
