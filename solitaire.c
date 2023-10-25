@@ -1446,7 +1446,9 @@ static void solitaire_menu(void) {
 				}
 
 				if (oc_ui_menu_button_fixed_width("Undo", button_width).pressed) {
-					undo_move();
+					if (game.state == STATE_PLAY) {
+						undo_move();
+					}
 				}
 
 				{ // game mode buttons: draw 1 or 3
