@@ -402,6 +402,14 @@ static void update_score(UpdateScoreParams params) {
 	snprintf(game.score_string, sizeof(game.score_string), "Score: %d", game.score);
 }
 
+static void update_score_pile_transfer(Pile *from_pile, Pile *to_pile) {
+	UpdateScoreParams params = { 
+		.kind = SCORE_PILE_TRANSFER, 
+		.from_pile = from_pile,
+		.to_pile = to_pile};
+	update_score(params);
+}
+
 static Card *pile_pop(Pile *pile) {
 	Card *card = oc_list_pop_entry(&pile->cards, Card, node);
 	if (card) card->pile = NULL;
@@ -422,9 +430,10 @@ static void pile_push(Pile *pile, Card *card, bool instant) {
 // rather than a single element 
 static void pile_transfer(Pile *target_pile, Card *card, bool instant) {
 	assert(card->pile);
+	Pile *old_pile = card->pile;
 	oc_list_elt *node = &card->node;
 
-	oc_list *old_list = &card->pile->cards;
+	oc_list *old_list = &old_pile->cards;
 	if (node->next) {
 		node->next->prev = NULL;
 		old_list->first = node->next;
@@ -452,6 +461,10 @@ static void pile_transfer(Pile *target_pile, Card *card, bool instant) {
 		position_card_on_top_of_pile(current, target_pile, instant);
 		current->pile = target_pile;
 		target_pile->cards.first = node;
+	}
+
+	if (old_pile->kind == PILE_WASTE) {
+		position_all_cards_on_pile(&game.waste, instant);
 	}
 }
 
@@ -517,7 +530,8 @@ static void undo_move(void) {
 			position_all_cards_on_pile(&game.waste, false);
 		}
 
-		UpdateScoreParams params = { .kind = SCORE_UNDO, .score_change = 25 };
+		// score penalty for undo
+		UpdateScoreParams params = { .kind = SCORE_UNDO, .score_change = 15 };
 		update_score(params);
 
 		++game.undo_count;
@@ -743,6 +757,10 @@ static bool opposite_color_suits(Card *a, Card *b) {
 
 // is it legal to drag this card and those on top of it?
 static bool can_drag(Card *card) {
+	bool card_in_motion = card->pos.x != card->target_pos.x || card->pos.y != card->target_pos.y;
+	if (card_in_motion) {
+		return false;
+	}
 	for (oc_list_elt *node = card->node.prev; node; node = node->prev) {
 		Card *prev_card = oc_list_entry(node, Card, node);
 		if (!opposite_color_suits(card, prev_card) || (card->kind - prev_card->kind != 1)) {
@@ -836,13 +854,9 @@ static bool maybe_drop_dragged_card(void) {
 	for (i32 i=0; i<ARRAY_COUNT(game.foundations); ++i) {
 		Pile *pile = &game.foundations[i]; 
 		if (can_drop_card_on_pile(pile, drag_card)) {
-			UpdateScoreParams params = { 
-				.kind = SCORE_PILE_TRANSFER, 
-				.from_pile = drag_card->pile, 
-				.to_pile = pile};
-			update_score(params);
+			update_score_pile_transfer(drag_card->pile, pile);
 			undo_push_pile_transfer(drag_card);
-			pile_transfer(pile, drag_card, true);
+			pile_transfer(pile, drag_card, false);
 			return true;
 		}
 	}
@@ -851,13 +865,9 @@ static bool maybe_drop_dragged_card(void) {
 	for (i32 i=0; i<ARRAY_COUNT(game.tableau); ++i) {
 		Pile *pile = &game.tableau[i];
 		if (can_drop_card_on_pile(pile, drag_card)) {
-			UpdateScoreParams params = { 
-				.kind = SCORE_PILE_TRANSFER, 
-				.from_pile = drag_card->pile, 
-				.to_pile = pile};
-			update_score(params);
+			update_score_pile_transfer(drag_card->pile, pile);
 			undo_push_pile_transfer(drag_card);
-			pile_transfer(pile, drag_card, true);
+			pile_transfer(pile, drag_card, false);
 			return true;
 		}
 	}
@@ -925,13 +935,9 @@ static bool auto_transfer_card_to_foundation(Card *card) {
 		}
 
 		if (auto_transfer) {
-			UpdateScoreParams params = { 
-				.kind = SCORE_PILE_TRANSFER, 
-				.from_pile = card->pile, 
-				.to_pile = &game.foundations[i] };
-			update_score(params);
+			update_score_pile_transfer(card->pile, &game.foundations[i]);
 			undo_push_pile_transfer(card);
-			pile_transfer(&game.foundations[i], card, true);
+			pile_transfer(&game.foundations[i], card, false);
 			return true;
 		}
 	}
@@ -956,7 +962,7 @@ static bool step_cards_towards_target(f32 rate) {
 	for (i32 i=0; i<ARRAY_COUNT(game.cards); ++i) {
 		Card *card = &game.cards[i];
 		if (card->pos.x != card->target_pos.x || card->pos.y != card->target_pos.y) {
-			if (vec2_dist(card->pos, card->target_pos) < 0.1) {
+			if (vec2_dist(card->pos, card->target_pos) < 1) {
 				card->pos = card->target_pos;
 			} else {
 				card->pos.x += (card->target_pos.x - card->pos.x) * rate * game.dt;
@@ -1031,22 +1037,12 @@ static void solitaire_update_autocomplete(void) {
 					if (tableau_top->suit == foundation_top->suit &&
 						tableau_top->kind == foundation_top->kind + 1)
 					{
-						UpdateScoreParams params = { 
-							.kind = SCORE_PILE_TRANSFER, 
-							.from_pile = tableau_top->pile,
-							.to_pile = foundation_pile,
-						};
-						update_score(params);
+						update_score_pile_transfer(tableau_top->pile, foundation_pile);
 						pile_transfer(foundation_pile, tableau_top, false);
 						card_transferred = true;
 					}
 				} else if (tableau_top->kind == CARD_ACE){
-					UpdateScoreParams params = { 
-						.kind = SCORE_PILE_TRANSFER, 
-						.from_pile = tableau_top->pile,
-						.to_pile = foundation_pile,
-					};
-					update_score(params);
+					update_score_pile_transfer(tableau_top->pile, foundation_pile);
 					pile_transfer(foundation_pile, tableau_top, false);
 					card_transferred = true;
 				}
@@ -1146,14 +1142,10 @@ static void solitaire_update_play(void) {
 		if (hovered_card) {
 			// start dragging card
 			if (can_drag(hovered_card)) {
-				bool card_in_motion = hovered_card->pos.x != hovered_card->target_pos.x || 
-				                      hovered_card->pos.y != hovered_card->target_pos.y;
 				// store pos and drag offset for all cards being dragged together
 				for (oc_list_elt *node = &hovered_card->node; node; node = node->prev) {
 					Card *card = oc_list_entry(node, Card, node);
-					if (!card_in_motion) {
-						card->pos_before_drag = card->pos;
-					}
+					card->pos_before_drag = card->pos;
 					card->drag_offset.x = game.mouse_input.x - card->pos.x;
 					card->drag_offset.y = game.mouse_input.y - card->pos.y;
 				}

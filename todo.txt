@@ -16,15 +16,15 @@ Undo                                 -25 (and undo any scoring from the move)
 
 
 TODO:
-[ ] bug where clicking a card on waste to autotransfer to foundation caused the
-    card to move to the top left of the screen, seemingly to position 0, 0. unable
-    to reproduce again though
 [ ] shift+alt+2 to trigger win animation
 [ ] add some sound
 [ ] on tableau when dropping a card, if it overlaps both a pile and an empty
     slot and can go in both, prefer the pile maybe ???
 
 DONE:
+[X] fix bug where clicking a card on waste to autotransfer to foundation caused
+		the card to move to the top left of the screen, seemingly to position 0, 0.
+    unable to reproduce again though
 [X] fix: clicking to drag a card that is in the middle of returning to its
 		previous position messes up its position
 [X] scoring
