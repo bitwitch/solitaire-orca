@@ -387,6 +387,13 @@ static void update_score(UpdateScoreParams params) {
 	case SCORE_UNDO:
 		game.score -= params.score_change;
 		break;
+	case SCORE_TIME_BONUS: {
+		if (game.timer > 0) {
+			i32 bonus = (i32)(700000 / game.timer);
+			game.score += bonus;
+		}
+		break;
+	}
 	default: 
 		assert(0);
 		break;
@@ -1054,6 +1061,8 @@ static void solitaire_update_autocomplete(void) {
 	bool any_card_moved = step_cards_towards_target(game.deal_speed);
 
 	if (tableau_empty && !any_card_moved) {
+		UpdateScoreParams params = { .kind = SCORE_TIME_BONUS };
+		update_score(params);
 		game.state = STATE_WIN;
 	}
 }
@@ -1206,6 +1215,8 @@ static void solitaire_update_play(void) {
 				}
 
 				if (is_game_won()) {
+					UpdateScoreParams params = { .kind = SCORE_TIME_BONUS };
+					update_score(params);
 					game.state = STATE_WIN;
 				}
 			} else {

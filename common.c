@@ -105,6 +105,7 @@ typedef enum {
 	SCORE_REVEAL_TABLEAU,
 	SCORE_RECYCLE_WASTE,
 	SCORE_UNDO,
+	SCORE_TIME_BONUS,
 } ScoreKind;
 
 typedef struct {
