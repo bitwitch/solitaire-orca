@@ -16,13 +16,13 @@ Undo                                 -25 (and undo any scoring from the move)
 
 
 TODO:
-[ ] scoring
 [ ] shift+alt+2 to trigger win animation
 [ ] add some sound
 [ ] on tableau when dropping a card, if it overlaps both a pile and an empty
     slot and can go in both, prefer the pile maybe ???
 
 DONE:
+[X] scoring
 [X] show number of moves in menu bar maybe
 [X] undo system
 	[X] calculate number of moves made

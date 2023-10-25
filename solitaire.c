@@ -1015,16 +1015,29 @@ static void solitaire_update_autocomplete(void) {
 			if (!tableau_top) continue;
 			for (i32 j=0; j<ARRAY_COUNT(game.foundations); ++j) {
 				if (card_transferred) break;
-				Card *foundation_top = pile_peek_top(&game.foundations[j]);
+				Pile *foundation_pile = &game.foundations[j];
+				Card *foundation_top = pile_peek_top(foundation_pile);
 				if (foundation_top) {
 					if (tableau_top->suit == foundation_top->suit &&
 						tableau_top->kind == foundation_top->kind + 1)
 					{
-						pile_transfer(&game.foundations[j], tableau_top, false);
+						UpdateScoreParams params = { 
+							.kind = SCORE_PILE_TRANSFER, 
+							.from_pile = tableau_top->pile,
+							.to_pile = foundation_pile,
+						};
+						update_score(params);
+						pile_transfer(foundation_pile, tableau_top, false);
 						card_transferred = true;
 					}
 				} else if (tableau_top->kind == CARD_ACE){
-					pile_transfer(&game.foundations[j], tableau_top, false);
+					UpdateScoreParams params = { 
+						.kind = SCORE_PILE_TRANSFER, 
+						.from_pile = tableau_top->pile,
+						.to_pile = foundation_pile,
+					};
+					update_score(params);
+					pile_transfer(foundation_pile, tableau_top, false);
 					card_transferred = true;
 				}
 			}
