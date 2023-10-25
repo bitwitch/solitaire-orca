@@ -510,6 +510,9 @@ static void undo_move(void) {
 			position_all_cards_on_pile(&game.waste, false);
 		}
 
+		UpdateScoreParams params = { .kind = SCORE_UNDO, .score_change = 25 };
+		update_score(params);
+
 		++game.undo_count;
 		update_moves_string();
 	}
