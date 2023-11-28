@@ -350,6 +350,48 @@ static void undo_push_score_change(i32 score_change) {
 	game.temp_undo_stack[game.temp_undo_stack_index++] = move;
 }
 
+void update_highscore(i32 score) {
+	game.highscore = score;
+	snprintf(game.highscore_string, sizeof(game.highscore_string), "High Score: %d", game.highscore);
+}
+
+void load_highscore(void) {
+	oc_str8 path = OC_STR8("highscore.dat");
+	oc_file file = oc_file_open(path, OC_FILE_ACCESS_READ, OC_FILE_OPEN_NONE);
+    if(oc_file_last_error(file) != OC_IO_OK) {
+        oc_log_error("Could not open file %*.s\n", oc_str8_ip(path));
+		update_highscore(0);
+		return;
+    }
+ 
+	i32 score = 0;
+	u64 size = sizeof(i32);
+	u64 bytes_read = oc_file_read(file, size, (char*)&score);
+	if (bytes_read != size) {
+		oc_log_error("Couldn't read highscore data\n");
+		score = 0;
+	} 
+	oc_file_close(file);
+	update_highscore(score);
+}
+
+void save_highscore(void) {
+	oc_str8 path = OC_STR8("highscore.dat");
+	oc_file file = oc_file_open(path, OC_FILE_ACCESS_WRITE, OC_FILE_OPEN_NONE);
+	if(oc_file_last_error(file) != OC_IO_OK) {
+		oc_log_error("Could not open file %*.s\n", oc_str8_ip(path));
+		return;
+	}
+ 
+	u64 size = sizeof(i32);
+	u64 bytes_written = oc_file_write(file, size, (char*)&game.highscore);
+	if (bytes_written != size) {
+		oc_log_error("Failed to save highscore to disk");
+	}
+
+	oc_file_close(file);
+}
+
 static void update_score(UpdateScoreParams params) {
 	switch (params.kind) {
 	case SCORE_RESET:
@@ -400,6 +442,10 @@ static void update_score(UpdateScoreParams params) {
 	}
 	if (game.score < 0) game.score = 0;
 	snprintf(game.score_string, sizeof(game.score_string), "Score: %d", game.score);
+
+	if (game.score > game.highscore) {
+		update_highscore(game.score);
+	}
 }
 
 static void update_score_pile_transfer(Pile *from_pile, Pile *to_pile) {
@@ -1059,6 +1105,7 @@ static void solitaire_update_autocomplete(void) {
 	if (tableau_empty && !any_card_moved) {
 		UpdateScoreParams params = { .kind = SCORE_TIME_BONUS };
 		update_score(params);
+		save_highscore();
 		game.state = STATE_WIN;
 	}
 }
@@ -1209,6 +1256,7 @@ static void solitaire_update_play(void) {
 				if (is_game_won()) {
 					UpdateScoreParams params = { .kind = SCORE_TIME_BONUS };
 					update_score(params);
+					save_highscore();
 					game.state = STATE_WIN;
 				}
 			} else {
@@ -1440,6 +1488,17 @@ static void solitaire_menu(void) {
 	{
 		oc_ui_menu_bar("menu_bar") 
 		{
+			// Game Dropdown Menu
+			oc_ui_style_next(&(oc_ui_style){ 
+					.size.width = { .kind = OC_UI_SIZE_PARENT, .value = 0.3333, .relax = 1 },
+					.size.height = { .kind = OC_UI_SIZE_PARENT, .value = 1 },
+					.layout.axis = OC_UI_AXIS_X,
+					.layout.align.x = OC_UI_ALIGN_START,
+					.layout.align.y = OC_UI_ALIGN_CENTER },
+					OC_UI_STYLE_SIZE
+					| OC_UI_STYLE_LAYOUT_AXIS
+					| OC_UI_STYLE_LAYOUT_ALIGN_X
+					| OC_UI_STYLE_LAYOUT_ALIGN_Y);
 			oc_ui_menu_begin("Game");
 			{
 				f32 button_width = 185;
@@ -1478,10 +1537,26 @@ static void solitaire_menu(void) {
 				oc_ui_menu_end();
 			}
 
+			// High Score
+			oc_ui_style_next(&(oc_ui_style){ 
+				.size.width = { .kind = OC_UI_SIZE_PARENT, .value = 0.3333, .relax = 1 },
+				.size.height = { .kind = OC_UI_SIZE_PARENT, .value = 1 },
+				.layout.axis = OC_UI_AXIS_X,
+				.layout.align.x = OC_UI_ALIGN_CENTER,
+				.layout.align.y = OC_UI_ALIGN_CENTER },
+				OC_UI_STYLE_SIZE
+				| OC_UI_STYLE_LAYOUT_AXIS
+				| OC_UI_STYLE_LAYOUT_ALIGN_X
+				| OC_UI_STYLE_LAYOUT_ALIGN_Y);
+			oc_ui_container("menu bar middle", OC_UI_FLAG_NONE)
+			{
+				oc_ui_label(game.highscore_string);
+			}
+
 			// Score and Timer
 			oc_ui_style_next(&(oc_ui_style){ 
-				.size.width = { OC_UI_SIZE_PARENT, 1, 1},
-				.size.height = { OC_UI_SIZE_PARENT, 1, 1 },
+				.size.width  = { .kind = OC_UI_SIZE_PARENT, .value = 0.3333, .relax = 1 },
+				.size.height = { .kind = OC_UI_SIZE_PARENT, .value = 1 },
 				.layout.axis = OC_UI_AXIS_X,
 				.layout.align.x = OC_UI_ALIGN_END,
 				.layout.align.y = OC_UI_ALIGN_CENTER ,
@@ -1491,8 +1566,7 @@ static void solitaire_menu(void) {
 				| OC_UI_STYLE_LAYOUT_ALIGN_X
 				| OC_UI_STYLE_LAYOUT_ALIGN_Y
 				| OC_UI_STYLE_LAYOUT_MARGIN_X);
-
-			oc_ui_container("menu bar end", OC_UI_FLAG_NONE)
+			oc_ui_container("menu bar right", OC_UI_FLAG_NONE)
 			{
 				oc_ui_style_next(&(oc_ui_style){ .layout.margin.x = 15 }, OC_UI_STYLE_LAYOUT_MARGIN_X);
 				oc_ui_label(game.score_string);
@@ -1546,6 +1620,7 @@ ORCA_EXPORT void oc_on_init(void) {
 
 	UpdateScoreParams params = { .kind = SCORE_RESET };
 	update_score(params);
+	load_highscore();
 
 	oc_vec2 viewport_size = { 1000, 775 };
 	set_sizes_based_on_viewport(viewport_size.x, viewport_size.y);

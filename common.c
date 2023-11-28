@@ -169,6 +169,8 @@ typedef struct {
 
 	i32 score;
 	char score_string[14]; // Score: 000000
+	i32 highscore;
+	char highscore_string[19]; // High Score: 000000
 
 	oc_vec2 frame_size;
 	oc_vec2 board_margin;
