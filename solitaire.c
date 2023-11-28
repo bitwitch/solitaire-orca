@@ -1274,6 +1274,10 @@ static void end_frame_input(void) {
 }
 
 static void solitaire_update(void) {
+	if (game.state == STATE_PLAY || game.state == STATE_AUTOCOMPLETE) {
+		game.timer += game.dt;
+		update_timer_string(game.timer);
+	}
 
 	switch (game.state) {
 	case STATE_DEALING:
@@ -1659,8 +1663,6 @@ ORCA_EXPORT void oc_on_frame_refresh(void) {
     f64 timestamp = oc_clock_time(OC_CLOCK_DATE);
 	game.dt = timestamp - game.last_timestamp;
 	game.last_timestamp = timestamp;
-	game.timer += game.dt;
-	update_timer_string(game.timer);
 
 	solitaire_menu();
 	solitaire_update();

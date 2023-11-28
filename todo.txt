@@ -6,18 +6,25 @@ functions where a "move" is made:
 - maybe_drop_dragged_card()
 
 Scoring:
-Waste to Tableau 	                     5
-Waste to Foundation 	                10
-Tableau to Foundation 	              10
-Turn over Tableau card 	               5
-Foundation to Tableau 	             −15
-Recycle waste when playing by ones 	−100 (minimum score is 0)
-Undo                                 -25 (and undo any scoring from the move)
+Waste to Tableau                       5
+Waste to Foundation                   10
+Tableau to Foundation                 10
+Turn over Tableau card                 5
+Foundation to Tableau                −15
+Recycle waste when playing by ones  −100 (minimum score is 0)
+Undo                                 -15 (and undo any scoring from the move)
 
 
 TODO:
+[ ] improve quality of How to Play images. The current versions were made hastily.
+[ ] improve performance of end animation
+		- either look into orca runtime to see if i can figure out if there is a bug
+		  in the renderer. martin says it shouldn't be that slow so probably a bug.
+      or i can just figure out a more efficient algorithm, figure out which
+			cards are on top to prevent overdraw.
+[ ] persistent high score
 [ ] shift+alt+2 to trigger win animation
-[ ] add some sound
+[ ] add some sound (orca doesn't support audio yet)
 [ ] on tableau when dropping a card, if it overlaps both a pile and an empty
     slot and can go in both, prefer the pile maybe ???
 
