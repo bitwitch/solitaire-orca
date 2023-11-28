@@ -1,19 +1,22 @@
 @echo off
+setlocal enabledelayedexpansion
 
 set ORCA_DIR=C:\Users\shmow\code\third-party\orca
 set STDLIB_DIR=%ORCA_DIR%\src\libc-shim
 
 set "src_dir=%~dp0"
+set "src_dir=!src_dir:~0,-1!"
+
 set wasm_flags=--target=wasm32^
-       --no-standard-libraries ^
-       -mbulk-memory ^
-       -g -O2 ^
-       -D__ORCA__ ^
-       -Wl,--no-entry ^
-       -Wl,--export-dynamic ^
-       -isystem %STDLIB_DIR%\include ^
-       -I%ORCA_DIR%\src ^
-       -I%ORCA_DIR%\src\ext
+   --no-standard-libraries ^
+   -mbulk-memory ^
+   -g -O2 ^
+   -D__ORCA__ ^
+   -Wl,--no-entry ^
+   -Wl,--export-dynamic ^
+   -isystem %STDLIB_DIR%\include ^
+   -I%ORCA_DIR%\src ^
+   -I%ORCA_DIR%\src\ext
 
 if not exist build\ mkdir build
 pushd build
