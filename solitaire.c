@@ -355,14 +355,27 @@ void update_highscore(i32 score) {
 	snprintf(game.highscore_string, sizeof(game.highscore_string), "High Score: %d", game.highscore);
 }
 
+void log_file_status(oc_file file) {
+	char *types[] = { "OC_FILE_UNKNOWN", "OC_FILE_REGULAR", "OC_FILE_DIRECTORY", "OC_FILE_SYMLINK", "OC_FILE_BLOCK", "OC_FILE_CHARACTER", "OC_FILE_FIFO", "OC_FILE_SOCKET" };
+	oc_file_status status = oc_file_get_status(file);
+	oc_log_info("uid=%llu type=%s perm=%#x size=%llu created=%lld accessed=%lld modified=%lld", 
+			status.uid, types[status.type], status.perm, status.creationDate.seconds, 
+			status.accessDate.seconds, status.modificationDate.seconds);
+}
+
 void load_highscore(void) {
 	oc_str8 path = OC_STR8("highscore.dat");
 	oc_file file = oc_file_open(path, OC_FILE_ACCESS_READ, OC_FILE_OPEN_NONE);
+
+	oc_file_last_error(file);
+
     if(oc_file_last_error(file) != OC_IO_OK) {
-        oc_log_error("Could not open file %*.s\n", oc_str8_ip(path));
+        oc_log_info("No high score data found");
 		update_highscore(0);
 		return;
     }
+
+	log_file_status(file);
  
 	i32 score = 0;
 	u64 size = sizeof(i32);
@@ -377,7 +390,7 @@ void load_highscore(void) {
 
 void save_highscore(void) {
 	oc_str8 path = OC_STR8("highscore.dat");
-	oc_file file = oc_file_open(path, OC_FILE_ACCESS_WRITE, OC_FILE_OPEN_NONE);
+	oc_file file = oc_file_open(path, OC_FILE_ACCESS_WRITE, OC_FILE_OPEN_CREATE);
 	if(oc_file_last_error(file) != OC_IO_OK) {
 		oc_log_error("Could not open file %*.s\n", oc_str8_ip(path));
 		return;
@@ -445,6 +458,7 @@ static void update_score(UpdateScoreParams params) {
 
 	if (game.score > game.highscore) {
 		update_highscore(game.score);
+		save_highscore();
 	}
 }
 
